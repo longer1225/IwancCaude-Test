@@ -150,6 +150,9 @@ default-ask 原则：未匹配任何规则的敏感操作默认弹问，而非�
 
 ## 🚀 快速开始
 
+> 📌 **第一次配环境、要填自己的 API Key？** 直接看 **[TEAM_SETUP.md](TEAM_SETUP.md)**（三种配 Key 方式 + 报错对照表 + 验证步骤）。
+> 提醒：下面 `cp .env.example .env` 是早期写法，`.env.example` 缺 DeepSeek 端点配置（`IWAN_LLM_BASE_URL` / `IWAN_LLM_API_KEY_ENV`），照抄会去连 `api.anthropic.com` 然后报 Key 无效。
+
 ### 环境要求
 
 | 依赖 | 版本 | 说明 |
@@ -166,11 +169,9 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ### 安装与启动
 
 ```powershell
-git clone https://github.com/longer1225/IwanClaude.git
-cd IwanClaude
-git checkout feature/iwanclaude-windows
+cd <放这份代码的目录>
 uv sync
-cp .env.example .env        # 填入你的 API Key
+# 按 TEAM_SETUP.md 第 4 节写好 .env（填入你自己的 API Key）
 
 uv run iwan-tui             # 启动 TUI（daemon 懒启动，自动拉起）
 ```
