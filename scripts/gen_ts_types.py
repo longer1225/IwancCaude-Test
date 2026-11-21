@@ -29,6 +29,14 @@ from iwan_claude.core.bus import events as evts
 # 输出目标路径（相对仓库根）
 OUT_REL = Path("gui") / "src" / "renderer" / "src" / "protocol" / "types.ts"
 
+# 控制台代码页不是 UTF-8 时（Windows 西文 cp1252 / 中文 cp936），中文输出会乱码或直接抛
+# UnicodeEncodeError：CI 的 windows-latest 控制台是 cp1252，本脚本曾在 --check 通过之后
+# 崩在最后那句 print 上。errors="replace" 只影响无法编码的字符（变成 ?），不改变正常输出。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(errors="replace")
+
 _HEADER = (
     "// ⚠ AUTO-GENERATED - 由 scripts/gen_ts_types.py 从 pydantic 协议模型生成，勿手改。\n"
     "// 重新生成: uv run python scripts/gen_ts_types.py   校验: --check\n"

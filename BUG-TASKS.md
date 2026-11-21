@@ -170,6 +170,7 @@ Get-Content "$env:USERPROFILE\.iwan\logs\core.log" -Tail 20
 | Windows 环境变量兜底缺失 | `b45d9d9` | 进程环境没有 key 时，去读 `HKCU\Environment` / `HKLM\...\Environment` |
 | 单测耦合开发机 `.env` | `b45d9d9` | 新增 `IWAN_ENV_FILE`，`conftest.py` 指到不存在的文件 |
 | GUI 给 daemon 单开控制台黑窗 | `64caf8a` | Windows 上 `detached: true` 会给子进程新建控制台窗口 |
+| 生成脚本在非 UTF-8 控制台崩溃 | 首次 CI 修复 | `gen_ts_types.py` / `gen_protocol_doc.py` 打印中文时，在 GitHub CI 的 cp1252 控制台上抛 `UnicodeEncodeError`——检查明明通过却报失败。修法：`sys.stdout.reconfigure(errors="replace")` |
 
 ## 附 2｜这些不是 bug（避免误报）
 

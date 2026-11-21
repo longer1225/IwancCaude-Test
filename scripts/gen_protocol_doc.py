@@ -28,6 +28,14 @@ from iwan_claude.core.bus.envelope import EventPushEnvelope
 
 _OUTPUT_PATH = Path(__file__).parent.parent / "WIRE_PROTOCOL.md"
 
+# 控制台代码页不是 UTF-8 时（Windows 西文 cp1252 / 中文 cp936），中文输出会乱码或直接抛
+# UnicodeEncodeError——CI 的 windows-latest 控制台就是 cp1252。errors="replace" 只影响
+# 无法编码的字符（变成 ?），正常输出与退出码不受影响。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(errors="replace")
+
 # 从 pydantic 模型生成一个带字段表、JSON Schema 和可选示例的 Markdown 小节
 def _model_section(name: str, model: type[BaseModel], example: dict | None = None) -> str:
     # 类 docstring 里的【设计目的】段落值得随 schema 一起展示（pydantic 已放进 description）
