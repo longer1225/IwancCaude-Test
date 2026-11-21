@@ -98,9 +98,15 @@ export async function ensureDaemon(onExit?: (code: number | null) => void): Prom
     // "退出码有了、原因没有"的现场只能靠它排（生产默认 ignore，不占句柄）
     const debugSpawn = process.env.IWAN_GUI_DEBUG_SPAWN === '1'
     const uvBin = process.platform === 'win32' ? 'uv.exe' : 'uv'
+    // 【为什么 Windows 上不能用 detached】Node 的 detached 在 Windows 会给子进程单独分配
+    // 控制台：uv 自己没有控制台，它再 spawn 的 iwan-core.exe（控制台程序）就会被系统新建一个
+    // 窗口——就是用户看到的那个黑终端（标题是 .venv\Scripts\iwan-core.exe）。
+    // 改成 detached:false + windowsHide:true（CREATE_NO_WINDOW）：uv 拿到一个"不可见控制台"，
+    // 孙进程继承它，全程无窗口；daemon 也仍会随 GUI 退出继续运行（Windows 不因父进程退出而杀子进程）。
+    // 其它平台保持 detached——需要真正脱离进程组才能长活。
     const child = spawn(uvBin, ['run', 'iwan-core'], {
       cwd: root,
-      detached: true,
+      detached: process.platform !== 'win32',
       stdio: debugSpawn ? ['ignore', 'pipe', 'pipe'] : 'ignore',
       windowsHide: true,
       shell: false,
