@@ -1,0 +1,23 @@
+# CODEOWNERS — 谁能改哪里
+#
+# 规则：路径后面的 @用户 或 @组织/团队 会被自动拉为评审人；
+# 配合分支保护的 "Require review from Code Owners"，关键目录必须由教师批准。
+#
+# ⚠️ 把 @longer1225 换成你自己的 GitHub 账号（或用 @你的组织/教师组）
+
+# 默认：所有改动都要教师过目
+*                                   @longer1225
+
+# 课程规则与工单：学生不得修改（改验收标准 = 改考卷）
+/BUG-TASKS.md                       @longer1225
+/CONTRIBUTING.md                    @longer1225
+/TEAM_SETUP.md                      @longer1225
+
+# CI 与 GitHub 配置：学生不得修改
+/.github/                           @longer1225
+
+# 构建与依赖清单：改依赖需要教师同意
+/pyproject.toml                     @longer1225
+/uv.lock                            @longer1225
+/gui/package.json                   @longer1225
+/gui/package-lock.json              @longer1225

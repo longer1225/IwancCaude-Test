@@ -66,3 +66,24 @@ jobs:
         run: npm run typecheck
       - name: 构建（main/preload/renderer）
         run: npm run build
+
+  # 聚合门禁：分支保护只需要勾这一个 check（名字是 ASCII，改内部任务名也不用动保护规则）
+  ci-status:
+    name: ci-status
+    if: always()
+    needs: [python, python-lint, gui]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总（任一未通过则失败；skipped 不算失败）
+        shell: bash
+        run: |
+          echo "python   : ${{ needs.python.result }}"
+          echo "lint     : ${{ needs.python-lint.result }}"
+          echo "gui      : ${{ needs.gui.result }}"
+          for r in "${{ needs.python.result }}" "${{ needs.python-lint.result }}" "${{ needs.gui.result }}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::有任务未通过（$r）"; exit 1 ;;
+            esac
+          done
+          echo "全部通过 ✅"

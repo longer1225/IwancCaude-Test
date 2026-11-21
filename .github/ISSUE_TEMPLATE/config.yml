@@ -1,0 +1,14 @@
+# 关闭"空白 issue"，强制走模板（否则学生交上来的问题描述没法复现）
+blank_issues_enabled: false
+
+# ⚠️ TODO：把 <owner>/<repo> 换成你实际的仓库地址
+contact_links:
+  - name: 课程工单清单（5 个已知缺陷）
+    url: https://github.com/<owner>/<repo>/blob/main/BUG-TASKS.md
+    about: 先看这里，已知缺陷不要重复报，直接开 PR 修
+  - name: 环境配置说明
+    url: https://github.com/<owner>/<repo>/blob/main/TEAM_SETUP.md
+    about: 配 API Key、起 GUI/TUI、常见报错对照表
+  - name: 提交规范
+    url: https://github.com/<owner>/<repo>/blob/main/CONTRIBUTING.md
+    about: 分支命名、提交信息、PR 流程与评分标准

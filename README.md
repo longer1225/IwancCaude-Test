@@ -385,6 +385,17 @@ uv run python scripts/gen_protocol_doc.py --check  # 校验 WIRE_PROTOCOL.md 与
 
 ## 📚 文档
 
+### 课程相关（先看这三份）
+
+| 位置 | 内容 |
+|------|------|
+| **[TEAM_SETUP.md](./TEAM_SETUP.md)** | **新成员上手：三种配 API Key 方式 + 四步验证 + 报错对照表** |
+| **[BUG-TASKS.md](./BUG-TASKS.md)** | **5 个已定位缺陷的工单：复现 / 验收标准 / 提示** |
+| **[CONTRIBUTING.md](./CONTRIBUTING.md)** | **提交规范：分支命名、PR 要求、评分维度、红线** |
+| [GITHUB-SETUP.md](./GITHUB-SETUP.md) | 仓库搭建手册（教师用）：分支保护、CI 门禁、权限与标签 |
+
+### 项目本身
+
 | 位置 | 内容 |
 |------|------|
 | **[docs/README.md](./docs/README.md)** | **文档导航（分类索引 + 复盘路线）** |
