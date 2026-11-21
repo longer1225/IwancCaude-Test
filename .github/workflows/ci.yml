@@ -7,6 +7,11 @@
 # - 协议文档与 TS 类型是"生成物"，必须与模型同步，否则客户端会按旧协议解析——这两步 gate。
 # - GUI 的 e2e（gui/scripts/e2e-parallel.mjs）需要真实桌面窗口 + CDP，CI 里没有桌面，
 #   只在本地跑；CI 只做 typecheck + build（构建能过 = 主进程/渲染层/预加载都能编译）。
+#
+# 【为什么单测要分片】同一套 1190 个用例：本地 70s，GitHub 的 windows-latest 上要 20 分钟+
+# （整体环境慢，不是个别用例卡住——--durations 显示最慢的也只有几秒）。单 job 跑完意味着
+# 学生每提一个 PR 要等半小时。这里按测试文件轮转切成 4 片并行跑，墙钟时间降到 ~1/4；
+# 每片是独立 VM，端口/临时目录不会互相干扰。分片是"按文件数"均分，不依赖任何插件。
 name: CI
 
 on:
@@ -19,12 +24,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # 单测分片数：改这里即可（同时改 matrix.shard 的列表长度）
+  SHARDS: '4'
+
 jobs:
-  python:
-    name: Python（协议同步 + 单测）
+  # 生成物一致性：与模型定义必须同步，否则客户端按旧协议解析
+  contract:
+    name: 协议/类型生成物同步
     runs-on: windows-latest
-    # 不设上限时，一个卡住的测试会让 PR 挂满 6 小时（GitHub 默认 job 超时）
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -34,10 +43,35 @@ jobs:
         run: uv run python scripts/gen_protocol_doc.py --check
       - name: GUI TS 类型与模型同步
         run: uv run python scripts/gen_ts_types.py --check
-      - name: 单元测试
-        # --durations=10 让每次运行都打印最慢的 10 个用例：Windows runner 上单测整体慢
-        # 一个数量级（本地 78s / CI 20min+），没有这份数据就没法判断该优化哪里
-        run: uv run pytest tests/unit -q --durations=10
+
+  python:
+    name: Python 单测（分片 ${{ matrix.shard }}/4）
+    runs-on: windows-latest
+    # 不设上限时，一个卡住的测试会让 PR 挂满 6 小时（GitHub 默认 job 超时）
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: 安装依赖
+        run: uv sync --frozen
+      - name: 单元测试（本分片）
+        # 按文件名排序后取第 shard-1, shard-1+SHARDS, ... 个：只用 PowerShell，不引插件
+        shell: pwsh
+        run: |
+          $shard = [int]"${{ matrix.shard }}"
+          $k = [int]$env:SHARDS
+          $all = Get-ChildItem tests/unit -Recurse -Filter 'test_*.py' |
+                 Sort-Object FullName |
+                 ForEach-Object { $_.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, '') }
+          $mine = @(for ($i = 0; $i -lt $all.Count; $i++) { if ($i % $k -eq ($shard - 1)) { $all[$i] } })
+          Write-Host ("分片 {0}/{1}：{2} 个测试文件（共 {3}）" -f $shard, $k, $mine.Count, $all.Count)
+          if ($mine.Count -eq 0) { Write-Host '本分片没有文件，跳过'; exit 0 }
+          # --durations=10：每次运行都打印本片最慢的 10 个用例，便于持续观察 CI 性能
+          uv run pytest @mine -q --durations=10
 
   python-lint:
     name: Python 静态检查（ruff + mypy，已清零，守门）
@@ -77,16 +111,17 @@ jobs:
   ci-status:
     name: ci-status
     if: always()
-    needs: [python, python-lint, gui]
+    needs: [contract, python, python-lint, gui]
     runs-on: ubuntu-latest
     steps:
       - name: 汇总（任一未通过则失败；skipped 不算失败）
         shell: bash
         run: |
+          echo "contract : ${{ needs.contract.result }}"
           echo "python   : ${{ needs.python.result }}"
           echo "lint     : ${{ needs.python-lint.result }}"
           echo "gui      : ${{ needs.gui.result }}"
-          for r in "${{ needs.python.result }}" "${{ needs.python-lint.result }}" "${{ needs.gui.result }}"; do
+          for r in "${{ needs.contract.result }}" "${{ needs.python.result }}" "${{ needs.python-lint.result }}" "${{ needs.gui.result }}"; do
             case "$r" in
               success|skipped) ;;
               *) echo "::error::有任务未通过（$r）"; exit 1 ;;
