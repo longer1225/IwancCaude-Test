@@ -63,7 +63,15 @@ uv run iwan --version
 
 ### 方式 A：写在项目根目录的 `.env`（推荐，最直观）
 
-在仓库根目录（和 `pyproject.toml` 同级）新建 `.env`，把下面的内容**整段**粘进去，只改最后一行：
+在仓库根目录（和 `pyproject.toml` 同级）新建 `.env`。最快的做法是：
+
+```powershell
+copy .env.example .env
+```
+
+然后只改其中一行 `DEEPSEEK_API_KEY=sk-你的Key`（记得取消注释）。模板已包含端点、模型、上下文窗口等全部必需项，不必自己拼。
+
+要手写的话，最小可用内容如下：
 
 ```ini
 # ── 服务地址 ──────────────────────────────
@@ -86,11 +94,10 @@ DEEPSEEK_API_KEY=sk-换成你自己的key
 - `IWAN_LLM_API_KEY_ENV` 存的是**变量名**（"去哪个环境变量里读 Key"），`DEEPSEEK_API_KEY` 那行才是**Key 本身**。
 - `.env` 已被 `.gitignore` 忽略（第 2 行），`git status` 里看不到它，也不会被提交。**不要用 `git add -f .env` 强行加进去。**
 
-> ⚠️ **别照抄仓库里的 `.env.example`**：那是早期模板，缺 `IWAN_LLM_BASE_URL` 和 `IWAN_LLM_API_KEY_ENV`。
-> 照抄的结果是程序去连 `api.anthropic.com`，然后报 Key 无效——一个很隐蔽的坑。请用上面这段。
+> ⚠️ 别把 `IWAN_LLM_BASE_URL` 删掉或留空：provider 默认是 `anthropic`，base_url 为空时会去连官方 `api.anthropic.com`，拿 DeepSeek 的 Key 打过去只会得到"Key 无效"——一个很隐蔽的坑。
 
-> 🔑 如果你拿到的 `.env` 里**已经有一行 `DEEPSEEK_API_KEY=sk-...`**（负责人自测留下的），
-> 请把它删掉换成你自己的 Key：用别人的 Key 等于花别人的钱，出问题也查不清是谁的额度。
+> 🔑 仓库里**不含任何真实 Key**（`.env` 与 `.env.example` 都是占位符）。
+> 如果你从别人那里拿到一份已经填好 `DEEPSEEK_API_KEY=sk-...` 的 `.env`，请换成你自己的：用别人的 Key 等于花别人的钱，出问题也查不清是谁的额度。
 
 ### 方式 B：设 Windows 用户级环境变量（不想让 Key 明文落盘）
 

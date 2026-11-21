@@ -151,7 +151,7 @@ default-ask 原则：未匹配任何规则的敏感操作默认弹问，而非�
 ## 🚀 快速开始
 
 > 📌 **第一次配环境、要填自己的 API Key？** 直接看 **[TEAM_SETUP.md](TEAM_SETUP.md)**（三种配 Key 方式 + 报错对照表 + 验证步骤）。
-> 提醒：下面 `cp .env.example .env` 是早期写法，`.env.example` 缺 DeepSeek 端点配置（`IWAN_LLM_BASE_URL` / `IWAN_LLM_API_KEY_ENV`），照抄会去连 `api.anthropic.com` 然后报 Key 无效。
+> 仓库**不内置任何 Key**：`copy .env.example .env` 后填入你自己的 Key（模板已含 DeepSeek 端点配置），或改用系统环境变量——详见下方「配置 API Key」。
 
 ### 环境要求
 
@@ -198,6 +198,147 @@ F7                      # 文件变更面板（勾选 → r 还原 / f 强制还
 /files                  # 同 F7，斜杠命令入口
 Ctrl+P                  # Textual 命令面板
 ```
+
+---
+
+## 🔑 配置 API Key
+
+**本仓库不内置任何 Key**，任何拿到它的人都必须自己配一个。三种放法任选其一：
+
+| 放置位置 | 形态 | 作用范围 | 优先级 |
+|---|---|---|---|
+| GUI「设置 → 模型与 API」→ `~/.iwan/secrets.env` | 明文（仅本机用户可读） | 本机所有项目 | **最高** |
+| Windows 环境变量 | 不落盘 | 按作用域而定 | 中 |
+| 项目根 `.env` | 明文（已被 `.gitignore` 忽略） | 仅本项目 | 低 |
+
+> 混用会让排查变难，**建议只用一种**。
+
+### 方式一：Windows 用户级环境变量（推荐）
+
+```powershell
+# 1) 写入当前 Windows 用户的环境变量（永久生效）
+[System.Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "sk-你的Key", "User")
+
+# 2) 关掉所有 PowerShell 窗口，重新打开一个新窗口（老进程读不到新变量）
+
+# 3) 在新窗口里验证：能回显说明写进去了（末尾 4 位不要发给别人）
+[System.Environment]::GetEnvironmentVariable("DEEPSEEK_API_KEY", "User")
+```
+
+作用域由第 3 个参数决定：
+
+| 写法 | 生效范围 | 说明 |
+|---|---|---|
+| `"User"` | 仅当前 Windows 用户 | ✅ 推荐 |
+| `"Machine"` | 本机所有用户 | 需管理员权限，共享电脑别用 |
+| `$env:DEEPSEEK_API_KEY = "sk-..."` | 仅当前这个 PowerShell 窗口 | 临时调试，关窗即失效 |
+
+删除：`[System.Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", $null, "User")`
+
+> 变量名必须与 `.env` 中 `IWAN_LLM_API_KEY_ENV` 的值一致（默认 `DEEPSEEK_API_KEY`）。
+
+### 方式二：项目根 `.env`
+
+```powershell
+copy .env.example .env
+```
+
+然后二选一：
+
+- 把 `DEEPSEEK_API_KEY=` 那一行取消注释并填上你的 Key（明文，**别把 `.env` 发给别人**）；
+- 或让它保持注释，只靠方式一的环境变量提供 Key。
+
+`.env` 与 `pyproject.toml` 同级，程序启动时会自动加载（当前目录优先，其次包根目录）。
+
+### 方式三：GUI 里填
+
+启动 GUI → **设置 →「模型与 API」**（顶栏菜单「配置模型与 API Key…」可直达）→ 填 Key → 保存。
+它会写进 `~/.iwan/secrets.env`：本机用户级、不进任何仓库、权限尽量收到 0600。
+
+### 校验是否生效
+
+```powershell
+uv run python -c "import os; from iwan_claude.core.config import get_config; c = get_config(); print(c.llm.provider, c.llm.base_url, c.llm.default_model, c.llm.api_key_env, bool(os.environ.get(c.llm.api_key_env)))"
+```
+
+期望输出（末尾 `True` 才是配好）：
+
+```text
+anthropic https://api.deepseek.com/anthropic deepseek-chat DEEPSEEK_API_KEY True
+```
+
+`False` = Key 没进到进程环境，启动时会报 `DEEPSEEK_API_KEY (or ANTHROPIC_API_KEY) not set`。
+优先检查：终端是否重开过、`.env` 是否在仓库根、变量名是否拼错。
+
+---
+
+## 🧠 模型使用约定
+
+### 1. 模型名只接受这两个
+
+| 模型 | 特点 | 适合 |
+|---|---|---|
+| `deepseek-chat` | 快、便宜（默认） | 日常改代码、写功能、问答 |
+| `deepseek-reasoner` | 推理强、慢、贵 | 复杂调试、架构设计、难题 |
+
+其他名字（如 `claude-*`、`gpt-*`）发过去会被上游拒绝，通常表现为 **404 或 model not found**。
+
+### 2. 三档预设 fast / balanced / powerful
+
+TUI 内用 `/model fast|balanced|powerful` 切换，或用 `IWAN_MODEL_PRESET` 设默认档。每一档实际用哪个模型，按此顺序解析：
+
+1. `config.toml` 的 `[llm.presets]` 里为该档显式指定的模型名；
+2. 否则用 `IWAN_LLM_DEFAULT_MODEL`（**当前配置就停在这一层**）；
+3. 两者都没有，才用内置表（`deepseek-chat` / `claude-sonnet-4-6` / `claude-opus-4-1-20250805` —— 混了两个服务商，只能算兜底）。
+
+> ⚠️ **按当前 `.env` 配置，切三档并不会真的换模型**：三档都会落到 `deepseek-chat`，区别只在上下文窗口预算。这是"我明明切了 powerful 却没变化"的根因。
+
+想让档位真正区分，建 `~/.iwan/config.toml`（全局）或 `.iwan/config.toml`（项目级，已被 gitignore）：
+
+```toml
+[llm]
+default_model = "deepseek-chat"
+
+[llm.presets]
+fast     = "deepseek-chat"
+balanced = "deepseek-chat"
+powerful = "deepseek-reasoner"
+```
+
+### 3. 上下文与步数
+
+| 变量 | 默认 | 含义 |
+|---|---|---|
+| `IWAN_LLM_CONTEXT_WINDOW` | `128000` | 只用于计算"上下文占用百分比"，不是给模型扩窗；填错会让界面数字失真 |
+| `IWAN_MAX_STEPS` | `20` | 单次任务最多 20 个工具回合，防死循环；长任务可调大 |
+| `IWAN_COMPACT_THRESHOLD` | 关闭 | 上下文占用超过该比例自动压缩历史（如 `0.9`） |
+
+---
+
+## 🔌 协议约定
+
+两种协议，**`provider` 与 `base_url` 必须配套**。只改一个 = 拿 A 协议的路径去打 B 协议的端点，症状往往伪装成"Key 无效"：
+
+| provider | base_url 填什么 | 程序实际请求 | Key 怎么带 |
+|---|---|---|---|
+| `anthropic`（默认） | Anthropic 兼容端点，**到 `/anthropic` 为止**<br>`https://api.deepseek.com/anthropic` | SDK 自动拼 `/v1/messages`<br>→ `.../anthropic/v1/messages` | `x-api-key` 头 |
+| `openai_compatible` | OpenAI 兼容端点，**必须带 `/v1`**<br>`https://api.deepseek.com/v1` | 程序拼 `/chat/completions`<br>→ `.../v1/chat/completions` | `Authorization: Bearer` |
+
+硬规则：
+
+1. `IWAN_LLM_API_KEY_ENV` 只写**变量名**（`DEEPSEEK_API_KEY`），绝不写 Key 本身；
+2. 换服务商时 `provider` + `base_url` + `api_key_env` **三件套一起改**；
+3. `base_url` 末尾不要带 `messages`、`chat/completions`，也不要带 query，程序自己拼；
+4. 配错协议的典型症状：**404**（路径不存在）、**401**（鉴权头类型不对）、或返回 HTML 而不是 JSON。
+
+常见厂商对照：
+
+| 服务商 | provider | base_url | api_key_env |
+|---|---|---|---|
+| DeepSeek（推荐） | `anthropic` | `https://api.deepseek.com/anthropic` | `DEEPSEEK_API_KEY` |
+| DeepSeek（OpenAI 协议） | `openai_compatible` | `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` |
+| 通义千问 | `openai_compatible` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `DASHSCOPE_API_KEY` |
+| Ollama（本地） | `openai_compatible` | `http://127.0.0.1:11434/v1` | 任意名（变量必须存在，值可随便填） |
 
 ---
 
