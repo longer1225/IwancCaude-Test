@@ -89,6 +89,9 @@ DEEPSEEK_API_KEY=sk-换成你自己的key
 > ⚠️ **别照抄仓库里的 `.env.example`**：那是早期模板，缺 `IWAN_LLM_BASE_URL` 和 `IWAN_LLM_API_KEY_ENV`。
 > 照抄的结果是程序去连 `api.anthropic.com`，然后报 Key 无效——一个很隐蔽的坑。请用上面这段。
 
+> 🔑 如果你拿到的 `.env` 里**已经有一行 `DEEPSEEK_API_KEY=sk-...`**（负责人自测留下的），
+> 请把它删掉换成你自己的 Key：用别人的 Key 等于花别人的钱，出问题也查不清是谁的额度。
+
 ### 方式 B：设 Windows 用户级环境变量（不想让 Key 明文落盘）
 
 ```powershell
@@ -158,6 +161,7 @@ npm run dev      # electron-vite 开发模式，窗口自动弹出
 | `402 Insufficient Balance` | 账户余额不足 | 充值后再试 |
 | `404`，报错里带 model 名 | `IWAN_LLM_DEFAULT_MODEL` 写错 | 只能填 `deepseek-chat` 或 `deepseek-reasoner` |
 | 提示端口已被占用 / 连不上 daemon | 这个端口已经有 daemon 在跑 | `uv run iwan core status`；或临时换端口 `$env:IWAN_PORT=8437` 后再起 |
+| 终端里中文显示成乱码（`է`、`？` 之类） | Windows 控制台默认 GBK 代码页 | 先执行 `chcp 65001`；或设 `$env:PYTHONIOENCODING='utf-8'` |
 | 完全没头绪 | — | 看日志 `%USERPROFILE%\.iwan\logs\core.log` |
 
 排查小技巧：`uv run iwan trace -f --layer llm` 可以实时看 LLM 调用流水（不含 Key 明文）。
