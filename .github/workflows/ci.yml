@@ -23,6 +23,8 @@ jobs:
   python:
     name: Python（协议同步 + 单测）
     runs-on: windows-latest
+    # 不设上限时，一个卡住的测试会让 PR 挂满 6 小时（GitHub 默认 job 超时）
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -33,11 +35,14 @@ jobs:
       - name: GUI TS 类型与模型同步
         run: uv run python scripts/gen_ts_types.py --check
       - name: 单元测试
-        run: uv run pytest tests/unit -q
+        # --durations=10 让每次运行都打印最慢的 10 个用例：Windows runner 上单测整体慢
+        # 一个数量级（本地 78s / CI 20min+），没有这份数据就没法判断该优化哪里
+        run: uv run pytest tests/unit -q --durations=10
 
   python-lint:
     name: Python 静态检查（ruff + mypy，已清零，守门）
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -50,6 +55,7 @@ jobs:
   gui:
     name: GUI（typecheck + build）
     runs-on: windows-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: gui

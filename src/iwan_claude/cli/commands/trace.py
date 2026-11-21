@@ -79,7 +79,9 @@ def cmd_trace(
         sys.exit(1)
 
     # 读取已有日志
-    with open(trace_path) as f:
+    # encoding 必须显式 utf-8：写端（trace/writer.py）按 UTF-8 落盘，而默认编码在中文
+    # Windows 是 cp936、CI 的 windows-latest 是 cp1252——不写就是乱码或 UnicodeDecodeError
+    with open(trace_path, encoding="utf-8") as f:
         for line in f:
             _process_line(
                 line.strip(),
@@ -91,7 +93,7 @@ def cmd_trace(
 
     # 如果需要实时跟踪（follow 模式）
     if follow:
-        with open(trace_path) as f:
+        with open(trace_path, encoding="utf-8") as f:
             # f.seek(0, 2)：定位到文件末尾
             # 0 表示偏移量，2 表示从文件末尾开始计算
             f.seek(0, 2)

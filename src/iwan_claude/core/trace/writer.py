@@ -136,7 +136,10 @@ class TraceWriter:
         使用示例：
             由 start() 自动创建，无需手动调用
         """
-        with open(self._path, "a") as f:
+        # encoding 必须显式给 utf-8：默认编码在本机是 locale（中文 Windows 是 cp936、
+        # CI 的 windows-latest 是 cp1252），trace 里出现 "CLIENT→CORE" 这类非 ASCII 时
+        # 会直接抛 UnicodeEncodeError，把一条普通的追踪写入变成后台任务崩溃
+        with open(self._path, "a", encoding="utf-8") as f:
             while True:
                 record = await self._queue.get()
                 try:

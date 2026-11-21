@@ -148,7 +148,7 @@ async def test_events_jsonl_created_with_started_and_finished(tmp_path: Path) ->
     await _run(tmp_path=tmp_path)
     jsonl_files = list(tmp_path.rglob("events.jsonl"))
     assert len(jsonl_files) == 1
-    lines = [json.loads(ln) for ln in jsonl_files[0].read_text().splitlines() if ln]
+    lines = [json.loads(ln) for ln in jsonl_files[0].read_text(encoding="utf-8").splitlines() if ln]
     event_types = [e["type"] for e in lines]
     assert event_types[0] == "run.started"
     assert event_types[-1] == "run.finished"
