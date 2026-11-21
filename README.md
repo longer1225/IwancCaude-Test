@@ -213,6 +213,11 @@ Ctrl+P                  # Textual 命令面板
 
 > 混用会让排查变难，**建议只用一种**。
 
+> 🪟 **Windows 兜底（v0.x 起）**：进程环境里没有 Key 时，程序会再去读 Windows 的**用户级 / 系统级环境变量**
+> （`HKCU\Environment` → `HKLM\...\Environment`），顺序是 `进程环境 > 用户级 > 系统级`。
+> 也就是说：你在「系统属性 → 环境变量」里加了 `DEEPSEEK_API_KEY` 之后，**不必重开终端或重启 GUI** ——
+> daemon 启动时会自动补上。只有 GitHub 令牌（`IWAN_GITHUB_TOKEN`）不做兜底，必须显式配置。
+
 ### 方式一：Windows 用户级环境变量（推荐）
 
 ```powershell

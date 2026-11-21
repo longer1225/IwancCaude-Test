@@ -27,6 +27,14 @@ def free_port() -> int:
     return port  # socket released; daemon can bind to this port
 
 
+# 关掉 Windows 注册表环境变量兜底（core/win_env.py）：开发机的真实 DEEPSEEK_API_KEY
+# 藏在用户/系统环境变量里，兜底会让"缺 key 应当报错"的用例在开发机上静默变成"有 key"
+os.environ["IWAN_DISABLE_WIN_ENV_FALLBACK"] = "1"
+# 包根 .env 的兜底路径指到不存在的文件：开发机 .env 里的 IWAN_PORT / 密钥不得渗进单测
+# （只影响"当前目录没有 .env 时回落到包根"这条路；用例自己在 cwd 写 .env 的行为不变）
+os.environ["IWAN_ENV_FILE"] = str(test_tmp_root() / "no-such.env")
+
+
 # 本机密钥文件全量改道：开发机上真有一把 ~/.iwan/secrets.env 时，任何 import 期
 # get_config() 都会把真 key 注进测试进程环境——"缺 key 应当报错"的断言会静默失效，
 # 更糟的是 running_daemon 复制 os.environ 后集成测试可能真打到线上 API
@@ -83,6 +91,8 @@ async def running_daemon(
     env["IWAN_PLUGINS_DIR"] = str(tmp_dir / "plugins")
     # 关语音预热：测试 daemon 不拖百兆模型进内存、不依赖模型缓存存在
     env["IWAN_SPEECH_PREWARM"] = "0"
+    # 注册表兜底同样要关：否则子 daemon 会从用户/系统环境变量里捞到真 key
+    env["IWAN_DISABLE_WIN_ENV_FALLBACK"] = "1"
     # LLM：daemon 启动期就会构造 provider（会话摘要用），缺 key 直接 SystemExit
     # ——不注入假 key 的话，整套集成测试都会死在 "Daemon did not start"。
     # 没有真实 key 的环境用假 key + 死端口 base_url：daemon 能起，万一有用例触发

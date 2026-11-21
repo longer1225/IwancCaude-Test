@@ -43,6 +43,7 @@ from __future__ import annotations
 # pathlib：路径操作
 # typing：类型提示
 # dotenv：加载 .env 文件中的环境变量
+import logging
 import os
 import tomllib
 from dataclasses import dataclass, field
@@ -53,6 +54,7 @@ from dotenv import load_dotenv
 
 from iwan_claude.core.model_presets import MODEL_PRESET_NAMES
 from iwan_claude.core.secret_store import apply_secrets_to_env
+from iwan_claude.core.win_env import apply_env_fallback
 
 # ===== 默认配置值 =====
 # 这些常量定义了系统的默认配置值
@@ -594,8 +596,11 @@ def get_config() -> IwanConfig:
     load_dotenv(".env", override=False)
     
     # 如果当前目录没有 .env，尝试从包目录加载
+    # 【为什么路径可覆盖】包根 .env 是开发机自己的配置（端口/密钥），单元测试不该受它影响：
+    # IWAN_ENV_FILE 指到一个不存在的文件，就能让"没有 .env 时用默认值"的用例保持确定性
+    # （tests/conftest.py 已设；不设时行为与以前完全一致）
     if not os.path.exists(".env"):
-        env_path = pkg_dir / ".env"
+        env_path = Path(os.environ.get("IWAN_ENV_FILE", str(pkg_dir / ".env"))).expanduser()
         if env_path.exists():
             load_dotenv(env_path, override=False)
 
@@ -633,9 +638,35 @@ def get_config() -> IwanConfig:
     # ===== 应用环境变量覆盖 =====
     # 环境变量优先级最高，可以覆盖 TOML 配置
     _apply_env(config)
-    
+
+    # ===== Windows 注册表兜底 =====
+    # 进程环境里没有密钥时，回头读用户级/系统级环境变量：用户在系统设置里刚加的
+    # DEEPSEEK_API_KEY 对已经在跑的 GUI/daemon 是不可见的（继承的是启动那一刻的环境块）
+    _apply_win_env_fallback(config)
+
     # 返回完整配置
     return config
+
+
+# 从 Windows 注册表补齐"进程环境里缺失的密钥变量"（只补密钥白名单，绝不整表导入）
+def _apply_win_env_fallback(config: IwanConfig) -> None:
+    injected = apply_env_fallback(
+        [
+            config.llm.api_key_env,
+            config.rag.embedding_api_key_env,
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "DASHSCOPE_API_KEY",
+            "QIANWEN_API_KEY",
+            "QWEN_API_KEY",
+            "ZHIPU_API_KEY",
+        ]
+    )
+    # 只记变量名，不记值（密钥不得进日志）
+    if injected:
+        logging.getLogger(__name__).info(
+            "env fallback: 进程环境缺失，已从 Windows 注册表补齐 %s", ", ".join(injected)
+        )
 
 
 # 将已解析的 TOML 根表写入 config；未知小节或类型错误时退出进程
