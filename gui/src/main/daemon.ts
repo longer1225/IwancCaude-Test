@@ -54,7 +54,9 @@ export function resetDaemonFailure(): void {
 }
 
 // 从安装包/开发目录两种形态反推 iwanclaude 仓库根（找同时含 pyproject.toml 与 src/iwan_claude 的目录）
-function findRepoRoot(): string | null {
+// 【为什么要导出】rpc-transport 也要用同一个根去读 .env（端口/令牌），
+// 必须与 spawn daemon 的 cwd 完全一致，否则 GUI 拨的端口和 daemon 听的端口会分家
+export function findRepoRoot(): string | null {
   // electron-vite 产物布局：out/main/index.js —— 开发态时 __dirname 位于仓库内，向上爬即可
   let dir = __dirname
   for (let i = 0; i < 8; i++) {

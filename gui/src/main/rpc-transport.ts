@@ -14,6 +14,7 @@ import { EventEmitter } from 'node:events'
 import readline from 'node:readline'
 
 import { DEFAULT_RETRY, retryDelayMs, shouldEnsureDaemon } from './retry'
+import { findRepoRoot } from './daemon'
 
 // 从 ~/.iwan/config.toml 文本里抠 [core] token（极简定向正则，不引 toml 解析依赖）
 // 只在行首作用域内取 [core] 段第一次出现的 token = "..."
@@ -22,6 +23,71 @@ function parseCoreToken(text: string): string {
   if (!core) return ''
   const kv = core[0].match(/^\s*token\s*=\s*"([^"]*)"/m)
   return kv ? kv[1] : ''
+}
+
+// 极简 .env 解析：KEY=VALUE，跳过注释与空行，去掉成对引号
+// 【为什么不引 dotenv 依赖】只用来取几个地址/令牌，正则足够；取值语义与 daemon 侧的
+// load_dotenv(override=False) 对齐：文件里的值只在进程环境没有该变量时才生效（见下面三级来源）
+export function readProjectEnv(root: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  let text = ''
+  try {
+    text = fs.readFileSync(path.join(root, '.env'), 'utf8')
+  } catch {
+    return out // 没有 .env 是常态，不是错误
+  }
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq <= 0) continue
+    const key = line
+      .slice(0, eq)
+      .trim()
+      .replace(/^export\s+/, '')
+    let value = line.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) out[key] = value
+  }
+  return out
+}
+
+// 仓库根 .env（进程内缓存一次：主进程启动后再改 .env，需要重启 GUI 才生效——与 daemon 同纪律）
+let cachedProjectEnv: Record<string, string> | null = null
+function projectEnv(): Record<string, string> {
+  if (cachedProjectEnv === null) {
+    cachedProjectEnv = readProjectEnv(findRepoRoot() ?? process.cwd())
+  }
+  return cachedProjectEnv
+}
+
+// daemon 地址的来源，用于日志/排查"我到底连了谁"
+export type EndpointSource = 'env' | '.env' | 'default'
+
+export interface DaemonEndpoint {
+  host: string
+  port: number
+  source: EndpointSource
+}
+
+// 解析 daemon 地址：IWAN_* 环境变量 > 仓库根 .env > 内置默认（与 config.py 的优先级一致）
+// 【为什么 GUI 必须读 .env】daemon 由本进程用 `uv run iwan-core`（cwd=仓库根）拉起，它读的
+// 就是仓库根 .env；GUI 过去只看 process.env，于是用户按 README 把端口写进 .env 之后，
+// GUI 仍去拨 7437 —— 连到的是"别人的 daemon"，自己 spawn 的那个反而永远连不上。
+export function resolveDaemonEndpoint(): DaemonEndpoint {
+  const fileEnv = projectEnv()
+  const rawPort = process.env.IWAN_PORT ?? fileEnv.IWAN_PORT
+  const rawHost = process.env.IWAN_HOST ?? fileEnv.IWAN_HOST
+  const source: EndpointSource =
+    process.env.IWAN_PORT || process.env.IWAN_HOST ? 'env' : rawPort || rawHost ? '.env' : 'default'
+  const parsed = Number(rawPort ?? '7437')
+  const port = Number.isFinite(parsed) && parsed > 0 ? parsed : 7437
+  return { host: rawHost || '127.0.0.1', port, source }
 }
 
 export type RpcParams = Record<string, unknown>
@@ -45,14 +111,20 @@ export class RpcTransport extends EventEmitter {
   private closedByUs = false
   status: ConnStatus = 'connecting'
 
-  // 从环境变量/默认值确定 daemon 地址（与 config.py 的 IWAN_PORT 语义一致）
+  // daemon 地址的来源（env / .env / default）——排查"我到底连了谁的 daemon"用
+  readonly endpointSource: EndpointSource
+
+  // 从 IWAN_* 环境变量 > 仓库根 .env > 默认值 确定 daemon 地址（与 config.py 的优先级一致）
   constructor() {
     super()
-    const p = Number(process.env.IWAN_PORT ?? '7437')
-    if (Number.isFinite(p) && p > 0) this.port = p
-    if (process.env.IWAN_HOST) this.host = process.env.IWAN_HOST
-    // 令牌三级来源：IWAN_TOKEN env > ~/.iwan/config.toml [core] token > 空(免鉴权)
-    this.token = process.env.IWAN_TOKEN ?? ''
+    const endpoint = resolveDaemonEndpoint()
+    this.host = endpoint.host
+    this.port = endpoint.port
+    this.endpointSource = endpoint.source
+    // 连接目标必须可见：否则"连到别人的 daemon"是完全静默的（改代码不生效、极难排查）
+    console.log(`[rpc] daemon 目标 ${endpoint.host}:${endpoint.port}（来源：${endpoint.source}）`)
+    // 令牌三级来源：环境变量 > 项目 .env > ~/.iwan/config.toml [core] token > 空(免鉴权)
+    this.token = process.env.IWAN_TOKEN ?? projectEnv().IWAN_TOKEN ?? ''
     if (!this.token) {
       try {
         this.token = parseCoreToken(

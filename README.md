@@ -270,6 +270,28 @@ anthropic https://api.deepseek.com/anthropic deepseek-chat DEEPSEEK_API_KEY True
 `False` = Key 没进到进程环境，启动时会报 `DEEPSEEK_API_KEY (or ANTHROPIC_API_KEY) not set`。
 优先检查：终端是否重开过、`.env` 是否在仓库根、变量名是否拼错。
 
+### 端口与地址：只写一处
+
+GUI 主进程、TUI、CLI，以及 GUI 懒启动的 daemon，全部按同一套优先级取地址：
+
+```text
+IWAN_* 环境变量  >  仓库根 .env  >  内置默认（127.0.0.1:7437）
+```
+
+所以想让两份副本在本机并行、互不抢端口，只改 `.env` 一行：
+
+```ini
+IWAN_PORT=7438
+```
+
+改完 **重启 GUI**（主进程只在启动时读一次 `.env`）。daemon 由 GUI 自己 spawn，读的是同一份 `.env`，端口天然一致。
+
+> 修复前的坑：GUI 只读环境变量、不读 `.env`，于是在 `.env` 里改了端口后，GUI 仍去拨 7437 ——
+> 连上的是"别人的 daemon"，自己 spawn 的那个反而永远连不上，而且界面没有任何提示（改后端代码"不生效"就是这么来的）。
+> 现在连接目标会打在主进程日志里：`[rpc] daemon 目标 127.0.0.1:7438（来源：.env）`。
+>
+> 注意：`iwan core start/stop` 仍走共享的 `~/.iwan/*.pid`，多副本并行时**别用它**管 daemon，让 GUI/TUI 自己懒启动即可。
+
 ---
 
 ## 🧠 模型使用约定
