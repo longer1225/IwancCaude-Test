@@ -291,7 +291,7 @@ TUI 内用 `/model fast|balanced|powerful` 切换，或用 `IWAN_MODEL_PRESET` �
 2. 否则用 `IWAN_LLM_DEFAULT_MODEL`（**当前配置就停在这一层**）；
 3. 两者都没有，才用内置表（`deepseek-chat` / `claude-sonnet-4-6` / `claude-opus-4-1-20250805` —— 混了两个服务商，只能算兜底）。
 
-> ⚠️ **按当前 `.env` 配置，切三档并不会真的换模型**：三档都会落到 `deepseek-chat`，区别只在上下文窗口预算。这是"我明明切了 powerful 却没变化"的根因。
+> ⚠️ **按当前 `.env` 配置，三档完全等价**：三档都会解析成 `deepseek-chat`；而且上下文窗口也统一被 `IWAN_LLM_CONTEXT_WINDOW`（128000）覆盖（`create_provider_from_config` 里传的是 `context_window_override=llm_config.context_window`），内置档位自带的 64K/128K/200K **并不会生效**。所以切档位只改变界面上的名字与颜色，不改变任何实际行为——这是"我明明切了 powerful 却没变化"的根因。
 
 想让档位真正区分，建 `~/.iwan/config.toml`（全局）或 `.iwan/config.toml`（项目级，已被 gitignore）：
 
@@ -309,7 +309,7 @@ powerful = "deepseek-reasoner"
 
 | 变量 | 默认 | 含义 |
 |---|---|---|
-| `IWAN_LLM_CONTEXT_WINDOW` | `128000` | 只用于计算"上下文占用百分比"，不是给模型扩窗；填错会让界面数字失真 |
+| `IWAN_LLM_CONTEXT_WINDOW` | `128000` | 程序"以为"模型能吃多少（算占用率的分母）。**不会**真让模型扩容；填大了会等真超限才报错，填小了会过早压缩。它还会覆盖三档预设自带的窗口值 |
 | `IWAN_MAX_STEPS` | `20` | 单次任务最多 20 个工具回合，防死循环；长任务可调大 |
 | `IWAN_COMPACT_THRESHOLD` | 关闭 | 上下文占用超过该比例自动压缩历史（如 `0.9`） |
 
