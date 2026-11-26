@@ -298,14 +298,18 @@ class SocketServer:
         try:
             line = await reader.readline()
         except asyncio.LimitOverrunError:
-            await self._send(writer, make_error(None, INVALID_REQUEST, "握手帧过大"))
+            await self._send_quietly(writer, make_error(None, INVALID_REQUEST, "握手帧过大"))
+            return False
+        except OSError as exc:
+            # 握手阶段就被强杀：同 _read_loop，只记 debug，不制造 Traceback（BUG-5）
+            logger.debug("client disconnected during handshake: %s", exc)
             return False
         if not line:
             return False  # 对端在握手前就断连，无需回话
         try:
             obj = json.loads(line)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            await self._send(writer, make_error(None, PARSE_ERROR, "握手帧非法 JSON"))
+            await self._send_quietly(writer, make_error(None, PARSE_ERROR, "握手帧非法 JSON"))
             return False
         rid = obj.get("id", "auth-hello") if isinstance(obj, dict) else "auth-hello"
         ok = (
@@ -315,11 +319,11 @@ class SocketServer:
         )
         if not ok:
             logger.warning("auth.hello 校验失败，断开连接")
-            await self._send(
+            await self._send_quietly(
                 writer, make_error(rid, AUTH_REQUIRED, "鉴权失败或缺少 auth.hello 握手")
             )
             return False
-        await self._send(writer, JsonRpcSuccess(id=rid, result={"ok": True}))
+        await self._send_quietly(writer, JsonRpcSuccess(id=rid, result={"ok": True}))
         return True
 
     async def _read_loop(
@@ -355,6 +359,13 @@ class SocketServer:
                 line = await reader.readline()
             except asyncio.LimitOverrunError:
                 await self._send(writer, make_error(None, INVALID_REQUEST, "Request too large"))
+                return
+            except OSError as exc:
+                # 客户端强杀 / 异常断连：readline 会抛 ConnectionResetError（Windows 上
+                # 表现为 [WinError 64] 指定的网络名不再可用）或 ConnectionAbortedError。
+                # 这里只记一行 debug 就收摊：旧实现放任它冒泡到 _handle_connection 的 task，
+                # asyncio 会打整段 Traceback，把 daemon 日志刷成"像崩了"的样子（BUG-5）。
+                logger.debug("client disconnected while reading: %s", exc)
                 return
 
             if not line:
@@ -397,13 +408,15 @@ class SocketServer:
         try:
             raw: Any = json.loads(line)
         except json.JSONDecodeError as e:
-            await self._send(writer, make_error(None, PARSE_ERROR, f"Parse error: {e}"))
+            await self._send_quietly(writer, make_error(None, PARSE_ERROR, f"Parse error: {e}"))
             return
 
         try:
             req = JsonRpcRequest.model_validate(raw)
         except ValidationError as e:
-            await self._send(writer, make_error(None, INVALID_REQUEST, "Invalid Request", str(e)))
+            await self._send_quietly(
+                writer, make_error(None, INVALID_REQUEST, "Invalid Request", str(e))
+            )
             return
 
         if self._trace is not None:
@@ -421,7 +434,7 @@ class SocketServer:
 
         handler = self._handlers.get(req.method)
         if handler is None:
-            await self._send(
+            await self._send_quietly(
                 writer,
                 make_error(req.id, METHOD_NOT_FOUND, f"Method not found: {req.method}"),
             )
@@ -431,17 +444,17 @@ class SocketServer:
         try:
             result = await handler(req.params)
         except HandlerError as e:
-            await self._send(writer, make_error(req.id, e.code, str(e), e.data))
+            await self._send_quietly(writer, make_error(req.id, e.code, str(e), e.data))
             return
         except ValidationError as e:
-            await self._send(
+            await self._send_quietly(
                 writer,
                 make_error(req.id, INVALID_REQUEST, "Invalid params", str(e)),
             )
             return
         except Exception as e:
             logger.exception("handler %s raised: %s", req.method, e)
-            await self._send(writer, make_error(req.id, INTERNAL_ERROR, "Internal error"))
+            await self._send_quietly(writer, make_error(req.id, INTERNAL_ERROR, "Internal error"))
             return
 
         result_data: Any = result.model_dump() if isinstance(result, BaseModel) else result
@@ -449,6 +462,25 @@ class SocketServer:
             await self._send(writer, JsonRpcSuccess(id=req.id, result=result_data))
         except (ConnectionResetError, BrokenPipeError, OSError):
             logger.debug("client disconnected before response for %s", req.method)
+
+    # 回包给可能已断开的连接：写失败只记 debug，不让异常变成 task 回溯（BUG-5）
+    async def _send_quietly(self, writer: asyncio.StreamWriter, msg: BaseModel) -> None:
+        """
+        发送消息，对端已断开则静默降级
+
+        【为什么单独一个方法】
+        错误应答、拒绝应答这类回包发生在"对端刚消失"的高频时刻（用户强杀 GUI/TUI）。
+        它们失败与否不影响 daemon 状态，却会让 asyncio 在 task 结束时打整段 Traceback。
+        收拢到一处而不是在每个 except 分支里重复 try/except。
+
+        参数：
+            writer: 客户端的 StreamWriter（可能已断开）
+            msg: 要发送的消息
+        """
+        try:
+            await self._send(writer, msg)
+        except OSError as exc:
+            logger.debug("client already gone, drop response: %s", exc)
 
     async def _send(self, writer: asyncio.StreamWriter, msg: BaseModel) -> None:
         """
