@@ -48,8 +48,10 @@ from iwan_claude.core.config import IwanConfig
 
 log = logging.getLogger(__name__)
 
-# 默认 PID 文件路径（用户 home 下的 .iwan 目录）
-_DEFAULT_PID_FILE = "~/.iwan/daemon.pid"
+# 默认 PID 文件路径（用户 home 下的 .iwan 目录，**按端口分文件**）
+# 【为什么带 {port}】旧路径 ~/.iwan/daemon.pid 是用户级共享的：同机两份副本
+# 会抢同一个锁文件，互相把对方当成"自己已经在起"，进而误判/误杀（BUG-2）。
+_DEFAULT_PID_FILE = "~/.iwan/pids/daemon-{port}.pid"
 
 # 默认 daemon 日志路径
 _DEFAULT_DAEMON_LOG = "~/.iwan/logs/daemon.log"
@@ -136,6 +138,28 @@ def _can_connect(host: str, port: int, timeout: float = _CONNECT_TIMEOUT_S) -> b
             return True
     except OSError:
         return False
+
+
+def _resolve_pid_path(port: int) -> Path:
+    """
+    解析默认 PID 文件路径（按端口分实例，可用 IWAN_PID_FILE 覆盖）
+
+    参数：
+        port: 实例监听端口
+    返回：
+        Path: PID 文件路径
+
+    【为什么允许覆盖】测试与"想手动指定实例标识"的高级用法需要固定路径；
+    `_DEFAULT_PID_FILE` 里若没有 {port} 占位符（测试 monkeypatch 的场景），
+    就直接当普通路径用，不做格式化。
+    """
+    override = os.environ.get("IWAN_PID_FILE")
+    if override:
+        return Path(override).expanduser()
+    template = _DEFAULT_PID_FILE
+    if "{port}" in template:
+        return Path(template.format(port=port)).expanduser()
+    return Path(template).expanduser()
 
 
 def _read_pid_file(pid_file: Path) -> int | None:
@@ -320,7 +344,7 @@ def ensure_daemon(
         False: 启动失败或超时
     """
     pid_path = (
-        Path(pid_file).expanduser() if pid_file else Path(_DEFAULT_PID_FILE).expanduser()
+        Path(pid_file).expanduser() if pid_file else _resolve_pid_path(config.port)
     )
     log_path = (
         Path(log_file).expanduser() if log_file else Path(_DEFAULT_DAEMON_LOG).expanduser()

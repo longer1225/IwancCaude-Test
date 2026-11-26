@@ -22,22 +22,112 @@ from __future__ import annotations
 # sys：系统相关操作，如获取 Python 解释器路径、判断操作系统
 # pathlib：路径操作，用于文件和目录管理
 import asyncio
+import json
+import logging
 import os
 import signal
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 # 导入配置数据结构
 from iwan_claude.core.config import IwanConfig
 
-# PID 文件路径：用户主目录下的 .iwan/iwan-core.pid
-# 这个文件用于记录 daemon 进程的 PID
-_PID_FILE = Path.home() / ".iwan" / "iwan-core.pid"
+log = logging.getLogger(__name__)
+
+# PID 文件目录：**按实例（端口）分文件**
+# 【为什么不再用 ~/.iwan/iwan-core.pid】那是用户级共享路径：同机跑两份副本
+# （7438/7439）时，后启动的会把前一份的记录覆盖掉，于是任意一份执行
+# `iwan core stop` 都可能按"别人的 PID"去杀进程（BUG-2）。
+_PID_DIR = Path.home() / ".iwan" / "pids"
 
 # 平台兼容性判断：检查当前操作系统是否为 Windows
 IS_WINDOWS = sys.platform == "win32"
+
+
+# 当前实例的 PID 文件路径（按端口区分，可用 IWAN_PID_FILE 显式指定）
+def _pid_file(config: IwanConfig) -> Path:
+    """
+    返回当前实例的 PID 文件路径
+
+    【优先级】IWAN_PID_FILE（显式指定，测试/高级用法） >
+              ~/.iwan/pids/iwan-core-<port>.pid
+
+    参数：
+        config: IwanConfig 配置对象（只用 host/port）
+
+    返回值：
+        Path: 该实例独占的 PID 文件路径
+    """
+    override = os.environ.get("IWAN_PID_FILE")
+    if override:
+        return Path(override).expanduser()
+    return _PID_DIR / f"iwan-core-{config.port}.pid"
+
+
+# 读 PID 记录：新格式是 JSON（含端口/启动时间），兼容旧的纯数字文件
+def _read_pid_record(path: Path) -> dict[str, Any] | None:
+    """
+    读取 PID 记录文件
+
+    参数：
+        path: PID 文件路径
+
+    返回值：
+        dict | None: 至少含 "pid" 键；文件不存在/内容非法时返回 None
+
+    【兼容性】旧版本写的是纯数字。这里仍然接受，只是拿不到端口字段——
+    调用方按"无端口信息"处理（也就是只校验进程存活）。
+    """
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    if not text:
+        return None
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        try:
+            return {"pid": int(text)}
+        except ValueError:
+            return None
+    # 纯数字在 JSON 里是合法标量（"4321" 会被解析成 int），同样按旧格式接受
+    if isinstance(obj, int):
+        return {"pid": obj}
+    if not isinstance(obj, dict):
+        return None
+    try:
+        obj["pid"] = int(obj["pid"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return obj
+
+
+# 写 PID 记录：pid + 端口 + 启动时间 + 工作目录
+def _write_pid_record(path: Path, pid: int, config: IwanConfig) -> None:
+    """
+    写入 PID 记录（JSON）
+
+    参数：
+        path: PID 文件路径
+        pid: daemon 进程号
+        config: IwanConfig 配置对象
+
+    【为什么要记端口和启动时间】Windows 的 PID 会被复用，只比对数字不可靠；
+    端口用于确认"这条记录属于哪个实例"，启动时间用于事后排查。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "pid": pid,
+        "host": config.host,
+        "port": config.port,
+        "started_at": datetime.now(UTC).isoformat(),
+        "cwd": str(Path.cwd()),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
 # 尝试连接 daemon，成功则正常返回，失败则抛出异常
@@ -103,41 +193,52 @@ def _pid_alive(pid: int) -> bool:
             return False
 
 
-# 读取 PID 文件并确认进程存活，进程已消失则删除文件并返回 None
-def _running_pid() -> int | None:
+# 读取本实例的 PID 记录并确认进程存活，进程已消失则删除文件并返回 None
+def _running_pid(config: IwanConfig) -> int | None:
     """
-    获取当前运行中的 daemon 进程 PID
-    
+    获取当前实例运行中的 daemon 进程 PID
+
     工作流程：
-    1. 检查 PID 文件是否存在
-    2. 读取 PID 文件内容
+    1. 定位本实例的 PID 文件（按端口）
+    2. 读取记录，校验记录里的端口与当前配置一致
     3. 验证进程是否仍然存活
     4. 如果进程不存在，删除脏 PID 文件
-    
+
+    参数：
+        config: IwanConfig 配置对象
+
     返回：
-        int | None: 进程 PID，如果未运行或文件不存在返回 None
+        int | None: 进程 PID，如果未运行/不是本实例/文件不存在返回 None
+
+    【为什么不直接杀文件里的 PID】旧实现读的是共享文件，文件里那条记录可能属于
+    另一个端口上的实例。端口不一致时宁可判"未运行"，也不能去杀别人的进程。
     """
-    # PID 文件不存在，说明 daemon 未运行
-    if not _PID_FILE.exists():
+    path = _pid_file(config)
+    record = _read_pid_record(path)
+    if record is None:
         return None
-    
-    try:
-        # 读取 PID 文件内容并转换为整数
-        pid = int(_PID_FILE.read_text().strip())
-        
-        # 检查进程是否存活
-        if _pid_alive(pid):
-            return pid
-        
-        # 进程已消失，但 PID 文件还在（脏文件），删除它
-        _PID_FILE.unlink(missing_ok=True)
-        return None
-        
-    except (ValueError, PermissionError):
-        # 文件内容不是有效整数，或者没有权限读取
-        # 删除脏 PID 文件
-        _PID_FILE.unlink(missing_ok=True)
-        return None
+
+    # 显式窄化类型：记录来自 JSON，字典取值是 Any（mypy strict 下不能直传）
+    pid = int(record["pid"])
+    recorded_port = record.get("port")
+    if recorded_port is not None:
+        try:
+            if int(recorded_port) != config.port:
+                log.debug(
+                    "pid file %s belongs to port %s, not %s — ignore",
+                    path, recorded_port, config.port,
+                )
+                return None
+        except (TypeError, ValueError):
+            return None
+
+    # 检查进程是否存活
+    if _pid_alive(pid):
+        return pid
+
+    # 进程已消失，但 PID 文件还在（脏文件），删除它
+    path.unlink(missing_ok=True)
+    return None
 
 
 # 跨平台：终止指定 PID 的进程
@@ -183,8 +284,13 @@ def cmd_core_status(config: IwanConfig) -> None:
     try:
         # 尝试连接 daemon
         asyncio.run(_ping_check(config))
-        # 连接成功，打印运行状态
-        print(f"running  ({config.host}:{config.port})")
+        # 连接成功：能连上的只可能是这个端口上的实例
+        pid = _running_pid(config)
+        if pid is not None:
+            print(f"running  ({config.host}:{config.port})  pid={pid}")
+        else:
+            # 端口活着但没有本实例的记录：别的入口起的（懒启动/手动 -m）
+            print(f"running  ({config.host}:{config.port})  pid=?")
     except (ConnectionRefusedError, OSError):
         # 连接失败，打印未运行状态
         print("not running")
@@ -250,10 +356,8 @@ def cmd_core_start(config: IwanConfig) -> None:
         **popen_kwargs,
     )
     
-    # 确保 PID 文件的父目录存在
-    _PID_FILE.parent.mkdir(parents=True, exist_ok=True)
-    # 将 PID 写入文件
-    _PID_FILE.write_text(str(proc.pid))
+    # 确保本实例 PID 文件的父目录存在，并写入带端口信息的记录
+    _write_pid_record(_pid_file(config), proc.pid, config)
     
     # 打印启动信息
     print(f"started  pid={proc.pid}  ({config.host}:{config.port})")
@@ -277,8 +381,8 @@ def cmd_core_stop(config: IwanConfig) -> None:
     参数：
         config: IwanConfig 配置对象
     """
-    # 获取运行中的进程 PID
-    pid = _running_pid()
+    # 获取本实例运行中的进程 PID
+    pid = _running_pid(config)
     
     if pid is None:
         # 未运行，打印提示
@@ -287,7 +391,7 @@ def cmd_core_stop(config: IwanConfig) -> None:
     
     # 终止进程
     _kill_pid(pid)
-    # 删除 PID 文件
-    _PID_FILE.unlink(missing_ok=True)
+    # 删除本实例的 PID 文件（别人的文件不碰）
+    _pid_file(config).unlink(missing_ok=True)
     # 打印停止信息
     print(f"stopped  pid={pid}")
