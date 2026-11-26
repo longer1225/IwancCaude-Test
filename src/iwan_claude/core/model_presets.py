@@ -30,6 +30,9 @@ from dataclasses import dataclass
 # enum：枚举类型，用于定义有限的合法值集合
 from enum import StrEnum
 
+# 上下文窗口口径（独立模块，无内部依赖；窗口跟着模型名走，避免表里写死而过期）
+from iwan_claude.core.context_window import resolve_context_window
+
 
 class ModelPresetName(StrEnum):
     """
@@ -98,17 +101,18 @@ class ModelPreset:
 MODEL_PRESETS: dict[str, ModelPreset] = {
     ModelPresetName.FAST.value: ModelPreset(
         model="deepseek-chat",           # DeepSeek 快速模型
-        context_window=64_000,           # 64K context window
+        # 窗口跟着模型名走，与 provider 用同一张表；手写 64K 会与真实窗口打架（BUG-4 现象 3）
+        context_window=resolve_context_window("deepseek-chat"),
         description="快速模型，适合简单任务（低成本、高速度）",
     ),
     ModelPresetName.BALANCED.value: ModelPreset(
         model="claude-sonnet-4-6",       # Claude Sonnet 平衡模型
-        context_window=128_000,          # 128K context window
+        context_window=resolve_context_window("claude-sonnet-4-6"),
         description="平衡模型，适合日常开发（性能与成本均衡）",
     ),
     ModelPresetName.POWERFUL.value: ModelPreset(
         model="claude-opus-4-1-20250805",  # Claude Opus 强力模型
-        context_window=200_000,             # 200K context window
+        context_window=resolve_context_window("claude-opus-4-1-20250805"),
         description="强力模型，适合复杂任务（最强性能、最高成本）",
     ),
 }
@@ -166,7 +170,8 @@ def resolve_preset(
     - default_model: str | None - 来自 config.llm.default_model 的兜底模型名
 
     【返回值】
-    - ModelPreset: 模型名按解析顺序替换；context_window/description 沿用内置档位
+    - ModelPreset: 模型名按解析顺序替换；context_window 按**解析后的模型**查表
+      （不再沿用内置档位的窗口），description 沿用内置档位
     """
     base = get_model_preset(name)
     model = ((overrides or {}).get(name) or "").strip()
@@ -174,8 +179,10 @@ def resolve_preset(
         model = (default_model or "").strip()
     if not model or model == base.model:
         return base
+    # 窗口必须跟着"解析后的模型"走：powerful 被覆盖成 deepseek-chat 却沿用 200K，
+    # 会让 context_pct 少报一半、压缩水线永不触发（BUG-4 现象 3 的真正危害）
     return ModelPreset(
         model=model,
-        context_window=base.context_window,
+        context_window=resolve_context_window(model),
         description=base.description,
     )

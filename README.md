@@ -318,7 +318,9 @@ TUI 内用 `/model fast|balanced|powerful` 切换，或用 `IWAN_MODEL_PRESET` �
 2. 否则用 `IWAN_LLM_DEFAULT_MODEL`（**当前配置就停在这一层**）；
 3. 两者都没有，才用内置表（`deepseek-chat` / `claude-sonnet-4-6` / `claude-opus-4-1-20250805` —— 混了两个服务商，只能算兜底）。
 
-> ⚠️ **按当前 `.env` 配置，三档完全等价**：三档都会解析成 `deepseek-chat`；而且上下文窗口也统一被 `IWAN_LLM_CONTEXT_WINDOW`（128000）覆盖（`create_provider_from_config` 里传的是 `context_window_override=llm_config.context_window`），内置档位自带的 64K/128K/200K **并不会生效**。所以切档位只改变界面上的名字与颜色，不改变任何实际行为——这是"我明明切了 powerful 却没变化"的根因。
+> ⚠️ **按当前 `.env` 配置，三档完全等价**：三档都会解析成 `deepseek-chat`。所以切档位只改变界面上的名字与颜色，不改变实际调用的模型——这是"我明明切了 powerful 却没变化"的根因。三档等价时 daemon 会在 debug 日志里说明原因；想真正区分请按下面的 `[llm.presets]` 配置。
+>
+> 模型是否为该端点支持的，由**厂商错配检查**兜底：解析出的模型厂商（`claude-*` → Anthropic、`deepseek-*` → DeepSeek）与 `base_url` 的厂商不一致时，daemon 会打一条明确告警（提示大概率 404 以及该改哪里），不会静默把 claude 的模型名发给 DeepSeek 端点。
 
 想让档位真正区分，建 `~/.iwan/config.toml`（全局）或 `.iwan/config.toml`（项目级，已被 gitignore）：
 
@@ -336,9 +338,16 @@ powerful = "deepseek-reasoner"
 
 | 变量 | 默认 | 含义 |
 |---|---|---|
-| `IWAN_LLM_CONTEXT_WINDOW` | `128000` | 程序"以为"模型能吃多少（算占用率的分母）。**不会**真让模型扩容；填大了会等真超限才报错，填小了会过早压缩。它还会覆盖三档预设自带的窗口值 |
+| `IWAN_LLM_CONTEXT_WINDOW` | 不设置 | 程序"以为"模型能吃多少（算占用率的分母）。**不会**真让模型扩容；填大了会等真超限才报错，填小了会过早压缩。不设置时按模型名查内置窗口表（claude-* 200K、deepseek-* 128K、未知模型 128K）；设置后优先级高于档位窗口与内置表 |
 | `IWAN_MAX_STEPS` | `20` | 单次任务最多 20 个工具回合，防死循环；长任务可调大 |
 | `IWAN_COMPACT_THRESHOLD` | 关闭 | 上下文占用超过该比例自动压缩历史（如 `0.9`） |
+
+**上下文窗口的权威顺序**：`IWAN_LLM_CONTEXT_WINDOW` / `[llm] context_window`（显式配置）
+> 当前档位自带的窗口（`ModelPreset.context_window`，跟着解析后的模型名走）
+> 内置模型窗口表
+> 兜底 128K。
+
+档位窗口不再是"死字段"：没显式配窗口时，`/model powerful` 切到的模型按它自己的窗口算占用率。
 
 ---
 

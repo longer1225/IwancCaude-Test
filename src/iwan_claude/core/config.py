@@ -181,7 +181,11 @@ class LlmConfig:
     # 模型名
     default_model: str = _DEFAULT_MODEL
     # 模型 context window（用于计算 context_pct）
-    context_window: int = 128_000
+    # 【为什么默认是 None 而不是 128_000】None = 用户没配，交给 provider 按模型查表
+    # （见 llm/provider.py::resolve_context_window）。旧默认值 128_000 永远非 None，
+    # 于是"查表"那条分支从来不会执行——claude 的 200K 被压成 128K，deepseek 与未知
+    # 模型又被硬算成 128K/200K，上下文占用率与压缩时机全部失真（BUG-1）。
+    context_window: int | None = None
     # 模型路由策略
     router: str = "static"  # "static" | "rule_based" (S4) | "cost_budget" (S6)
     # 三档预设 → 具体模型名的覆盖（空表 = 用 model_presets.py 的内置表）

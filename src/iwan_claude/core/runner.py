@@ -1156,14 +1156,18 @@ class AgentRunner:
                 # 创建或获取 LLM Provider
                 # 如果设置了模型预设，使用预设中的模型名称覆盖默认配置
                 model_override: str | None = None
+                preset_window: int | None = None
                 if self._permission_manager is not None:
                     preset_name = self._permission_manager.get_model_preset()
                     # config 的 [llm.presets] 可以覆盖档位对应的模型名（GUI 里可改）
                     preset_info = resolve_preset(preset_name, self._config.llm.presets, self._config.llm.default_model)
                     model_override = preset_info.model
+                    # 档位窗口随行：未显式配 [llm] context_window 时，用它作为 context_pct 的分母
+                    preset_window = preset_info.context_window
                 provider: LLMProvider = self._provider or create_provider_from_config(
                     self._config.llm,
                     model_override=model_override,
+                    preset_context_window=preset_window,
                 )
                 
                 # 如果启用了跟踪，包装 provider

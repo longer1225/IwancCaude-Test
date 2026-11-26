@@ -37,18 +37,13 @@ import httpx
 # 导入事件类型
 from iwan_claude.core.bus.events import LlmModelSelectedEvent, LlmTokenEvent, LlmUsageEvent
 
+# 上下文窗口口径（独立模块：model_presets 也要用，放在 llm 包内会形成循环导入）
+from iwan_claude.core.context_window import resolve_context_window
+
 # 导入核心组件
 from iwan_claude.core.events.bus import EventBus
 from iwan_claude.core.llm.types import LlmResponse, ToolCallBlock, UsageStats
 from iwan_claude.core.system_prompt import FALLBACK_SYSTEM_PROMPT
-
-# 模型上下文窗口映射表
-# key: 模型名称，value: 最大 token 数
-_MODEL_CONTEXT_WINDOWS: dict[str, int] = {
-    "claude-sonnet-4-6": 200_000,
-    "claude-haiku-4-5-20251001": 200_000,
-    "claude-opus-4-7": 200_000,
-}
 
 # 最大重试次数
 _MAX_STREAM_RETRIES = 3
@@ -62,19 +57,15 @@ log = logging.getLogger(__name__)
 
 def _context_window(model: str) -> int:
     """
-    返回指定模型的最大上下文窗口 token 数
-    
+    【历史兼容入口】只按内置表查窗口，等价于 resolve_context_window(model, None)
+
     参数：
         model: 模型名称
-    
+
     返回值：
-        int: 最大上下文窗口 token 数（默认 200_000）
-    
-    【设计说明】
-    使用字典映射模型名称到上下文窗口大小，
-    如果模型不在映射表中，默认使用 200_000。
+        int: 模型表里的窗口值，查不到则回落默认值
     """
-    return _MODEL_CONTEXT_WINDOWS.get(model, 200_000)
+    return resolve_context_window(model)
 
 
 # Provider 层兜底 system prompt
@@ -187,19 +178,15 @@ class AnthropicProvider:
     def _effective_context_window(self) -> int:
         """
         返回有效的上下文窗口大小
-        
+
         【学习要点】
         1. 优先级：配置覆盖 > 硬编码映射 > 默认值
-        2. 零值检查：确保覆盖值大于 0 才使用
-        
+        2. 零值/None 检查：只有显式配了正数才用覆盖值
+
         返回值：
             int: 有效的上下文窗口 token 数
         """
-        # 如果有配置覆盖且大于 0，使用覆盖值
-        if self._context_window_override and self._context_window_override > 0:
-            return self._context_window_override
-        # 否则从映射表中查找
-        return _context_window(self._model)
+        return resolve_context_window(self._model, self._context_window_override)
 
     async def chat(
         self,
