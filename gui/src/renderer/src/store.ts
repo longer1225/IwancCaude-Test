@@ -68,6 +68,9 @@ interface State {
   status: string
   // 连接失败的可读原因（daemon 启动日志尾部）：空串表示没有额外信息
   statusDetail: string
+  // 已连接 daemon 的身份：external=true 表示连到了另一份代码的 daemon
+  //（改本仓库 src/ 不生效），顶栏据此显示"已连接外部 daemon（路径）"
+  daemonIdentity: IwanDaemonIdentity
   sessions: SessionMeta[]
   activeSid: string | null
   threads: Record<string, Msg[]>
@@ -101,6 +104,7 @@ interface State {
   bumpNotice(sid: string, delta: number): void
   setStatus(s: string): void
   setStatusDetail(detail: string): void
+  setDaemonIdentity(info: IwanDaemonIdentity): void
   setActive(sid: string | null): void
   setCwd(cwd: string | null): void
   upsertSession(meta: SessionMeta): void
@@ -181,6 +185,7 @@ function consumeEcho(sid: string, text: string): boolean {
 export const useStore = create<State>((set, get) => ({
   status: 'connecting',
   statusDetail: '',
+  daemonIdentity: { external: false, daemonRoot: '', localRoot: '', message: '' },
   sessions: [],
   activeSid: null,
   threads: {},
@@ -202,6 +207,15 @@ export const useStore = create<State>((set, get) => ({
   notices: {},
   setStatus: (s) => set({ status: s }),
   setStatusDetail: (detail) => set({ statusDetail: detail }),
+  // 身份只在内容变化时落库：重连会重复核验，同值 set 会白白触发一次全树渲染
+  setDaemonIdentity: (info) =>
+    set((st) =>
+      st.daemonIdentity.external === info.external &&
+      st.daemonIdentity.daemonRoot === info.daemonRoot &&
+      st.daemonIdentity.message === info.message
+        ? {}
+        : { daemonIdentity: info }
+    ),
   setActive: (sid) => set({ activeSid: sid }),
   setLlmConfig: (cfg) => set({ llmConfig: cfg }),
   setCwd: (cwd) => {

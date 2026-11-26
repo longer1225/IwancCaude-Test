@@ -1248,3 +1248,28 @@ input { font: inherit; color: inherit; }
 .voice-seg-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); animation: pulse 1.2s infinite; flex: none; }
 .voice-seg-busy { opacity: 0.7; }
 .voice-err { color: var(--danger); font-size: calc(var(--ui-font-px) - 2px); padding: 4px 10px 2px; }
+
+/* ===== 外部 daemon 提示（BUG-3）：标题栏常驻警示 chip + 主区横幅 =====
+   配色用 danger 而不是连接失败那套黄色：黄色=暂时连不上（会自动重试），
+   红色=连错了实例（功能看似正常，但改代码不生效），性质完全不同 */
+.tb-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--danger) 12%, var(--card-bg));
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+  -webkit-app-region: no-drag;
+}
+.conn-banner.external-daemon {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger);
+}

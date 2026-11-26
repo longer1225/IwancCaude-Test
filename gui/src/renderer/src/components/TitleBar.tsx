@@ -125,6 +125,25 @@ function ModelChip() {
   )
 }
 
+// 外部 daemon 提示：连到的 daemon 不属于本仓库时，标题栏常驻一枚警示 chip
+// 【为什么放标题栏】状态条只在断线时出现；"连到别人"恰恰是连着的时候最危险——
+// 改代码不生效、权限/回滚都作用在别人的进程上。常驻才能一直被看见（BUG-3）
+function ExternalDaemonChip() {
+  const identity = useStore((s) => s.daemonIdentity)
+  const status = useStore((s) => s.status)
+  if (!identity.external || status !== 'connected') return null
+  return (
+    <span
+      className="tb-external"
+      data-testid="external-daemon-chip"
+      title={`${identity.message}\n当前仓库：${identity.localRoot}`}
+    >
+      <Icon name="alert" size={12} />
+      <span className="tb-external-text">外部 daemon</span>
+    </span>
+  )
+}
+
 export function TitleBar() {
   const [maximized, setMaximized] = useState(false)
 
@@ -140,6 +159,7 @@ export function TitleBar() {
         <span className="tb-mark" aria-hidden="true" />iwan work
       </span>
       <ModelChip />
+      <ExternalDaemonChip />
       <span className="tb-drag" />
       <button
         className="tb-btn"

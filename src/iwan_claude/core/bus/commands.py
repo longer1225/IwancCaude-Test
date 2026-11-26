@@ -70,6 +70,52 @@ class PongResult(BaseModel):
     received_at: str
 
 
+class CoreInfoCommand(BaseModel):
+    """
+    实例身份查询命令 - 让客户端确认"我连的到底是哪个 daemon"
+
+    【字段说明】
+    - type: Literal["core.info"] - 命令类型
+    - client: str - 客户端标识
+
+    【为什么需要它】
+    core.ping 只返回版本号与运行时间，无法区分"同一份代码的另一个副本实例"。
+    两份副本端口撞车时，GUI 只要能连上就直接用，会静默连到另一份 daemon——
+    跑的是别人的后端代码，改 src/ 却"完全不生效"，界面上没有任何提示（BUG-3）。
+
+    【响应】
+    CoreInfoResult - 含 daemon 的 cwd / 仓库根 / 配置文件路径
+    """
+    type: Literal["core.info"] = "core.info"
+    client: str = "unknown"
+
+
+class CoreInfoResult(BaseModel):
+    """
+    实例身份响应 - 客户端据此判断"连的是不是本仓库的 daemon"
+
+    【字段说明】
+    - server_version: str - 服务端版本
+    - uptime_ms: int - 已运行毫秒数
+    - host: str - 实际监听地址
+    - port: int - 实际监听端口
+    - cwd: str - daemon 进程的工作目录
+    - repo_root: str - 从 cwd 向上找到的仓库根（含 .git）；找不到时等于 cwd
+    - config_path: str - 当前生效的 config.toml 路径
+    - received_at: str - 接收时间（ISO 8601）
+
+    【只读约定】本响应只暴露路径与版本，不含任何密钥、会话内容或用户数据。
+    """
+    server_version: str
+    uptime_ms: int
+    host: str
+    port: int
+    cwd: str
+    repo_root: str
+    config_path: str
+    received_at: str
+
+
 class AgentRunCommand(BaseModel):
     """
     Agent 运行命令 - 客户端请求运行 Agent
@@ -2478,6 +2524,7 @@ class PluginInstallResult(BaseModel):
 # 使用 Pydantic 的 Discriminator 实现多态类型，根据 type 字段自动推断命令类型
 Command = Annotated[
     PingCommand
+    | CoreInfoCommand
     | AgentRunCommand
     | EventSubscribeCommand
     | SessionCreateCommand

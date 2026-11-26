@@ -104,6 +104,99 @@ All commands are sent as JSON-RPC 2.0 requests. The `type` field inside `params`
 }
 ```
 
+### CoreInfoCommand
+
+| Field | Type | Required |
+|---|---|---|
+| `type` | `string` | no |
+| `client` | `string` | no |
+
+```json
+{
+  "description": "实例身份查询命令 - 让客户端确认\"我连的到底是哪个 daemon\"\n\n【字段说明】\n- type: Literal[\"core.info\"] - 命令类型\n- client: str - 客户端标识\n\n【为什么需要它】\ncore.ping 只返回版本号与运行时间，无法区分\"同一份代码的另一个副本实例\"。\n两份副本端口撞车时，GUI 只要能连上就直接用，会静默连到另一份 daemon——\n跑的是别人的后端代码，改 src/ 却\"完全不生效\"，界面上没有任何提示（BUG-3）。\n\n【响应】\nCoreInfoResult - 含 daemon 的 cwd / 仓库根 / 配置文件路径",
+  "properties": {
+    "type": {
+      "const": "core.info",
+      "default": "core.info",
+      "title": "Type",
+      "type": "string"
+    },
+    "client": {
+      "default": "unknown",
+      "title": "Client",
+      "type": "string"
+    }
+  },
+  "title": "CoreInfoCommand",
+  "type": "object"
+}
+```
+
+### CoreInfoResult
+
+| Field | Type | Required |
+|---|---|---|
+| `server_version` | `string` | yes |
+| `uptime_ms` | `integer` | yes |
+| `host` | `string` | yes |
+| `port` | `integer` | yes |
+| `cwd` | `string` | yes |
+| `repo_root` | `string` | yes |
+| `config_path` | `string` | yes |
+| `received_at` | `string` | yes |
+
+```json
+{
+  "description": "实例身份响应 - 客户端据此判断\"连的是不是本仓库的 daemon\"\n\n【字段说明】\n- server_version: str - 服务端版本\n- uptime_ms: int - 已运行毫秒数\n- host: str - 实际监听地址\n- port: int - 实际监听端口\n- cwd: str - daemon 进程的工作目录\n- repo_root: str - 从 cwd 向上找到的仓库根（含 .git）；找不到时等于 cwd\n- config_path: str - 当前生效的 config.toml 路径\n- received_at: str - 接收时间（ISO 8601）\n\n【只读约定】本响应只暴露路径与版本，不含任何密钥、会话内容或用户数据。",
+  "properties": {
+    "server_version": {
+      "title": "Server Version",
+      "type": "string"
+    },
+    "uptime_ms": {
+      "title": "Uptime Ms",
+      "type": "integer"
+    },
+    "host": {
+      "title": "Host",
+      "type": "string"
+    },
+    "port": {
+      "title": "Port",
+      "type": "integer"
+    },
+    "cwd": {
+      "title": "Cwd",
+      "type": "string"
+    },
+    "repo_root": {
+      "title": "Repo Root",
+      "type": "string"
+    },
+    "config_path": {
+      "title": "Config Path",
+      "type": "string"
+    },
+    "received_at": {
+      "title": "Received At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "server_version",
+    "uptime_ms",
+    "host",
+    "port",
+    "cwd",
+    "repo_root",
+    "config_path",
+    "received_at"
+  ],
+  "title": "CoreInfoResult",
+  "type": "object"
+}
+```
+
 ### AgentRunCommand
 
 | Field | Type | Required |

@@ -6,7 +6,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, type WebContents } from 'electron'
 import path from 'node:path'
 import { RpcTransport } from './rpc-transport'
-import { ensureDaemon, describeDaemonFailure, resetDaemonFailure } from './daemon'
+import { ensureDaemon, describeDaemonFailure, resetDaemonFailure, findRepoRoot } from './daemon'
 import { registerFsBridge } from './fs-bridge'
 
 let win: BrowserWindow | null = null // 最近创建的窗口（devtest/自检锚点；业务代码一律按 sender 定位）
@@ -18,6 +18,15 @@ let lastStatus = 'connecting'
 // 存在 store 里让渲染层直接展示"daemon 启动失败：DEEPSEEK_API_KEY ... not set"，
 // 而不是干等 120 次重试后只看到一句"无法连接 daemon"
 let statusDetail = ''
+// 已连接 daemon 的身份（仓库根）。external=true 表示连到了"另一份代码"的 daemon：
+// 此时改本仓库 src/ 完全不生效，界面必须显式告知（BUG-3）
+export interface DaemonIdentity {
+  external: boolean
+  daemonRoot: string
+  localRoot: string
+  message: string
+}
+let daemonIdentity: DaemonIdentity = { external: false, daemonRoot: '', localRoot: '', message: '' }
 let bootstrapped = false
 let devtestWired = false
 
@@ -50,6 +59,41 @@ function refreshDetail(): void {
   broadcast('iwan:status-detail', detail)
 }
 
+// 规范化路径再比较：Windows 盘符大小写、反斜杠、尾部分隔符都可能不同
+function normalizePath(p: string): string {
+  return p.replace(/[\\/]+$/, '').replace(/\//g, '\\').toLowerCase()
+}
+
+// 连上之后核验"对面是谁"：daemon 的仓库根与本机 GUI 的仓库根不一致时给明确提示
+// 【为什么必须做】GUI 只要能连上就直接用，不校验身份：两份副本端口撞车（或一方忘改端口）
+// 时会静默连到另一份 daemon——跑的是别人的后端代码，改本仓库 src/ 却"完全不生效"，
+// 界面毫无异常（BUG-3）。core.ping 只给版本与运行时间，区分不出仓库，所以用 core.info。
+async function checkDaemonIdentity(): Promise<void> {
+  if (!transport) return
+  const localRoot = findRepoRoot() ?? process.cwd()
+  try {
+    const info = await transport.request('core.info', { type: 'core.info', client: 'gui' })
+    const daemonRoot = String(info.repo_root || info.cwd || '')
+    const external = daemonRoot !== '' && normalizePath(daemonRoot) !== normalizePath(localRoot)
+    const message = external
+      ? `已连接外部 daemon（${daemonRoot}）——改当前仓库的 src/ 不会生效`
+      : ''
+    if (
+      external === daemonIdentity.external &&
+      daemonRoot === daemonIdentity.daemonRoot &&
+      message === daemonIdentity.message
+    ) {
+      return // 内容未变就不广播，避免重连时反复刷界面
+    }
+    daemonIdentity = { external, daemonRoot, localRoot, message }
+    console.log(`[main] daemon 身份：${external ? '外部实例' : '本仓库'}（${daemonRoot}），本地仓库 ${localRoot}`)
+    broadcast('iwan:daemon-identity', daemonIdentity)
+  } catch (err) {
+    // core.info 失败（老版本 daemon / 握手后立刻断开）：不制造噪音，保持上一次结论
+    console.warn('[main] core.info 失败，跳过身份核验:', String(err))
+  }
+}
+
 // 一次性装配：daemon 连接 + 文件桥 + ipc 通道。窗口可以开很多个，这些只能装一次
 // （ipcMain.handle 重复注册会直接抛错，且重连环只该有一个）
 function bootstrap(): void {
@@ -67,6 +111,8 @@ function bootstrap(): void {
         statusDetail = ''
         broadcast('iwan:status-detail', '')
       }
+      // 每次（重）连都核验一次身份：可能正是因为端口变了才连上"别人"
+      void checkDaemonIdentity()
     } else if (s !== 'connecting') {
       refreshDetail()
     }
@@ -85,6 +131,8 @@ function registerIpc(): void {
   ipcMain.handle('ui:status', () => lastStatus)
   // 失败原因补查（渲染层挂载晚于首个事件时兜底，与 ui:status 同模式）
   ipcMain.handle('ui:status-detail', () => statusDetail)
+  // daemon 身份补查：渲染层挂载晚于首次核验时靠它补上（与上面两条同模式）
+  ipcMain.handle('ui:daemon-identity', () => daemonIdentity)
   // 立刻手动拉起一次 daemon：缺 key 起不来的用户刚在设置里存好 key 时用——
   // 否则要等重连循环的低频阶段（最长两分钟）才会再次 spawn，用户以为保存没生效
   ipcMain.handle('ui:retry-daemon', async () => {

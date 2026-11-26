@@ -7,6 +7,8 @@ interface IwanBridge {
   getStatus(): Promise<string>
   getStatusDetail(): Promise<string>
   onStatusDetail(cb: (detail: string) => void): () => void
+  getDaemonIdentity(): Promise<IwanDaemonIdentity>
+  onDaemonIdentity(cb: (info: IwanDaemonIdentity) => void): () => void
   readDir(root: string, rel: string): Promise<Array<{ name: string; dir: boolean }>>
   readFile(root: string, rel: string): Promise<{ text: string; truncated: boolean; size: number; binary: boolean }>
   sessionsMeta(ids: string[]): Promise<Record<string, { cwd: string; created_at: string; run_ids: string[] }>>
@@ -33,6 +35,14 @@ interface IwanBridge {
 }
 
 declare global {
+  // 【为什么放在 declare global 里】本文件末尾有 `export {}`，属于模块作用域；
+  // 只有 declare global 内的声明才是全局可见的类型（store.ts / TitleBar 直接用得到）
+  interface IwanDaemonIdentity {
+    external: boolean
+    daemonRoot: string
+    localRoot: string
+    message: string
+  }
   interface Window {
     iwan: IwanBridge
   }

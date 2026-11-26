@@ -80,6 +80,8 @@ from iwan_claude.core.bus.commands import (  # noqa: E402
     AgentRunCommand,  # Agent 运行命令
     AgentRunResult,  # Agent 运行结果
     CheckpointInfo,  # 检查点信息
+    CoreInfoCommand,  # 实例身份查询命令（GUI 判断连的是不是本仓库的 daemon）
+    CoreInfoResult,  # 实例身份响应
     EventSubscribeCommand,  # 事件订阅命令
     EventSubscribeResult,  # 事件订阅结果
     FileChangeInfo,  # 文件变更条目
@@ -231,6 +233,7 @@ from iwan_claude.core.config_writer import (  # noqa: E402  只改目标段的 c
     ConfigWriteError,
     write_config_sections,
 )
+from iwan_claude.core.context_window import resolve_context_window  # 上下文窗口口径  # noqa: E402
 from iwan_claude.core.events.bus import EventBus  # 事件总线  # noqa: E402
 from iwan_claude.core.llm import create_provider_from_config  # LLM 提供者创建  # noqa: E402
 from iwan_claude.core.logging_setup import setup_logging  # 日志初始化  # noqa: E402
@@ -288,6 +291,18 @@ def _now() -> str:
         str: ISO 格式的时间字符串
     """
     return datetime.datetime.now(UTC).isoformat()
+
+
+# 从给定目录向上找仓库根（含 .git 的目录）；找不到就返回起点
+# 【为什么放在 daemon 侧】GUI 拿不到 daemon 进程的文件系统视图，只有 daemon 自己
+# 知道"我这份代码在哪"——core.info 返回它，客户端才能判断连的是不是本仓库实例
+def _find_repo_root(start: Path) -> Path:
+    """返回 start 及其祖先中第一个含 .git 的目录，找不到时返回 start"""
+    current = start.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return current
 
 
 # 目录里是否存在会被自动读进系统提示的指令/配置文件（信任弹窗的风险提示依据）
@@ -467,6 +482,38 @@ class CoreApp:
             server_version=iwan_claude.__version__,  # 服务器版本
             uptime_ms=uptime_ms,                     # 运行时长（毫秒）
             received_at=datetime.datetime.now(datetime.UTC).isoformat(),  # 接收时间
+        )
+
+    # 处理 core.info 请求：返回实例身份（cwd/仓库根/配置路径），供客户端判别"连的是谁"
+    async def _core_info_handler(self, params: dict[str, Any]) -> CoreInfoResult:
+        """
+        处理 core.info RPC 请求
+
+        参数：
+            params: 请求参数，包含 client 字段（客户端标识）
+
+        返回：
+            CoreInfoResult: 服务端版本、运行时长、监听地址、cwd、仓库根、配置路径
+
+        【为什么 cwd 与 repo_root 都返回】daemon 的 cwd 可能只是仓库的某个子目录
+        （用户在某层目录里 `iwan core start`）；客户端要比较的是"仓库根"，
+        所以服务端先向上找 .git，再把两个值都给出去，便于客户端在提示里展示原貌。
+        """
+        # 走一次模型校验：新命令按协议模型收参（非法 type/client 类型直接报 INVALID_REQUEST，
+        # 而不是静默把脏参数当成正常请求）
+        cmd = CoreInfoCommand.model_validate({**params, "type": "core.info"})
+        logger.debug("core.info from %s", cmd.client)
+
+        cwd = Path.cwd()
+        return CoreInfoResult(
+            server_version=iwan_claude.__version__,
+            uptime_ms=int((time.monotonic() - self._start_time) * 1000),
+            host=self._config.host if self._config is not None else "",
+            port=self._config.port if self._config is not None else 0,
+            cwd=str(cwd),
+            repo_root=str(_find_repo_root(cwd)),
+            config_path=str(active_config_path()),
+            received_at=datetime.datetime.now(datetime.UTC).isoformat(),
         )
 
     # 将 EventBus 事件写入 trace（作为 EventBus 订阅者）
@@ -2019,7 +2066,9 @@ class CoreApp:
             api_key_hint=key_hint(effective),
             api_key_source=source,
             default_model=llm.default_model,
-            context_window=llm.context_window,
+            # 报"真正在用的窗口"：未显式配置时按模型查表（与 provider 同一口径），
+            # 而不是把"未配置"当成 128K 报给 GUI（BUG-1）
+            context_window=resolve_context_window(llm.default_model, llm.context_window),
             presets=presets,
             preset_overrides=sorted(set(llm.presets) & set(MODEL_PRESET_NAMES)),
             active_preset=active,
@@ -2176,13 +2225,18 @@ class CoreApp:
             if self._permission_manager is not None
             else "balanced"
         )
-        model = resolve_preset(active, self._config.llm.presets, self._config.llm.default_model).model
+        preset_info = resolve_preset(active, self._config.llm.presets, self._config.llm.default_model)
+        model = preset_info.model
         api_key = os.environ.get(self._config.llm.api_key_env, "")
         started = time.monotonic()
         ok = False
         error = ""
         try:
-            provider = create_provider_from_config(self._config.llm, model_override=model)
+            provider = create_provider_from_config(
+                self._config.llm,
+                model_override=model,
+                preset_context_window=preset_info.context_window,
+            )
             # 独立 EventBus：测试用的 token 绝不能流进会话事件流（同标题精修的纪律）
             await asyncio.wait_for(
                 provider.chat(
@@ -2835,6 +2889,7 @@ class CoreApp:
         # ===== 注册 RPC 命令处理器 =====
         # 将命令名映射到处理方法
         server.register("core.ping", self._ping_handler)
+        server.register("core.info", self._core_info_handler)
         server.register("agent.run", self._agent_run_handler)
         server.register("event.subscribe", self._subscribe_handler)
         server.register("session.create", self._session_create_handler)

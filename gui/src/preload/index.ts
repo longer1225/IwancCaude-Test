@@ -5,6 +5,15 @@
 // 让渲染层不必处理主进程抛错通道的怪异语义。
 import { contextBridge, ipcRenderer } from 'electron'
 
+// 已连接 daemon 的身份（与主进程 DaemonIdentity 同构）：external=true 表示连到了
+// 另一份代码的 daemon——改本仓库 src/ 不生效，界面必须显式提示（BUG-3）
+export interface IwanDaemonIdentity {
+  external: boolean
+  daemonRoot: string
+  localRoot: string
+  message: string
+}
+
 contextBridge.exposeInMainWorld('iwan', {
   // 发 JSON-RPC 请求；method 用 WIRE_PROTOCOL.md 里的命令名，params 不含 type 字段
   request: (method: string, params?: Record<string, unknown>): Promise<{ ok: boolean; result?: Record<string, unknown>; error?: string }> =>
@@ -33,6 +42,13 @@ contextBridge.exposeInMainWorld('iwan', {
     const h = (_e: unknown, d: string): void => cb(d)
     ipcRenderer.on('iwan:status-detail', h)
     return () => ipcRenderer.removeListener('iwan:status-detail', h)
+  },
+  // 已连接 daemon 的身份（仓库根与本机不一致 = 连到了外部实例）；补查 + 订阅双通道
+  getDaemonIdentity: (): Promise<IwanDaemonIdentity> => ipcRenderer.invoke('ui:daemon-identity'),
+  onDaemonIdentity: (cb: (info: IwanDaemonIdentity) => void): (() => void) => {
+    const h = (_e: unknown, info: IwanDaemonIdentity): void => cb(info)
+    ipcRenderer.on('iwan:daemon-identity', h)
+    return () => ipcRenderer.removeListener('iwan:daemon-identity', h)
   },
   // 文件桥：项目目录树 / 文本预览（渲染层只能浏览传入 root 以内的路径）
   readDir: (root: string, rel: string): Promise<Array<{ name: string; dir: boolean }>> =>

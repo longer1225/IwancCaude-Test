@@ -7,6 +7,10 @@ export interface PingParams {
   client: string
 }
 
+export interface CoreInfoParams {
+  client?: string
+}
+
 export interface AgentRunParams {
   goal: string
 }
@@ -515,6 +519,17 @@ export interface PongResult {
   received_at: string
 }
 
+export interface CoreInfoResult {
+  server_version: string
+  uptime_ms: number
+  host: string
+  port: number
+  cwd: string
+  repo_root: string
+  config_path: string
+  received_at: string
+}
+
 export interface AgentRunResult {
   run_id: string
 }
@@ -848,6 +863,7 @@ export interface PluginInstallResult {
 export type CommandMethod =
   | "PydanticUndefined"
   | "agent.run"
+  | "core.info"
   | "core.ping"
   | "event.subscribe"
   | "files.changes"

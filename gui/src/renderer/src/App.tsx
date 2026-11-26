@@ -49,10 +49,12 @@ const EMPTY: never[] = []
 export default function App() {
   const status = useStore((s) => s.status)
   const statusDetail = useStore((s) => s.statusDetail)
+  const daemonIdentity = useStore((s) => s.daemonIdentity)
   const activeSid = useStore((s) => s.activeSid)
   const thread = useStore((s) => (activeSid ? s.threads[activeSid] ?? EMPTY : EMPTY))
   const setStatus = useStore((s) => s.setStatus)
   const setStatusDetail = useStore((s) => s.setStatusDetail)
+  const setDaemonIdentity = useStore((s) => s.setDaemonIdentity)
   const [booted, setBooted] = useState(false)
   const guiHydrate = useGui((s) => s.applyFromDisk)
   const hydrated = useGui((s) => s.hydrated)
@@ -98,14 +100,19 @@ export default function App() {
     // 连接失败原因：推送 + 挂载补查（与 status 同一套双通道，避免首帧丢失）
     const offDetail = window.iwan.onStatusDetail(setStatusDetail)
     void window.iwan.getStatusDetail().then(setStatusDetail).catch(() => undefined)
+    // daemon 身份（仓库根）：推 + 补查。身份核验发生在主进程"连上之后"，
+    // 渲染层挂载可能晚于那一刻，只订阅会漏掉首次结果（BUG-3 的提示就永远不出现）
+    const offIdentity = window.iwan.onDaemonIdentity(setDaemonIdentity)
+    void window.iwan.getDaemonIdentity().then(setDaemonIdentity).catch(() => undefined)
     // 补查当前状态：主进程可能在我们挂载前就 connected 了（事件已错过）
     void getStatus().then(applyStatus).catch(() => undefined)
     return () => {
       offEvent()
       offStatus()
       offDetail()
+      offIdentity()
     }
-  }, [setStatus, setStatusDetail])
+  }, [setStatus, setStatusDetail, setDaemonIdentity])
 
   const empty = !activeSid || thread.length === 0
 
@@ -145,6 +152,17 @@ export default function App() {
               </button>
               <Composer booted={booted} />
             </>
+          )}
+          {status === 'connected' && daemonIdentity.external && (
+            <div className="conn-banner external-daemon" data-testid="external-daemon-banner">
+              {/* 连到别的仓库的 daemon 时必须显式提示：否则"改代码不生效"会被当成
+                  GUI 的 bug 排查半天（BUG-3）。给出对方仓库根，用户一眼能对上号 */}
+              <b>已连接外部 daemon：</b>
+              {daemonIdentity.daemonRoot}
+              <span className="conn-hint">
+                （改当前仓库的 src/ 不会生效；可用 IWAN_PORT 错开端口后重启 GUI）
+              </span>
+            </div>
           )}
           {status !== 'connected' && (
             <div className="conn-banner">
