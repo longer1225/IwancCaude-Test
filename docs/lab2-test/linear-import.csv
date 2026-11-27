@@ -1,0 +1,118 @@
+﻿Title,Description,Priority,Labels,Status
+[BUG-1][FP-06] 上下文窗口表从未生效：不配窗口时一律按 128K 计算,"## 现象
+不配 `IWAN_LLM_CONTEXT_WINDOW` 时，任何模型都按 128000 算上下文占用率；内置表只有 3 个 claude 模型、没有 deepseek；未知模型一律静默返回 200000。
+
+## 复现步骤
+1. 从副本 `.env` 里删掉 `IWAN_LLM_CONTEXT_WINDOW=128000`（这一步必须做，否则测不到）
+2. 起 daemon：`uv run iwan core start`
+3. 调 `llm.config.get`，观察 `context_window` 字段
+4. 直接用代码验证：`resolve_context_window('claude-sonnet-4-6')` 与 `resolve_context_window('deepseek-chat')`
+
+## 期望 / 实际
+- 期望：claude-* 200000、deepseek-* 128000、未知模型回落 128000 并记 debug
+- 实际（修复前）：claude 报 128000；deepseek 报 200000；未知模型静默 200000
+
+## 根因
+`LlmConfig.context_window` 默认 `128_000`（永远非 None），`create_provider_from_config()` 无条件把它当 `context_window_override` 传下去，于是 provider 里“查表”分支从未执行。
+
+## 修复
+新增 `core/context_window.py`；`LlmConfig.context_window` 默认改 `None`；表补齐 deepseek 两项；未知模型兜底 128K 并记 debug；`llm.config.get` 上报真正在用的窗口。
+
+## 自测证据
+`tests/unit/test_llm_context_window.py`（11 条）；修复前 claude 报 128000 → 修复后 200000。
+
+## 位置与提交
+修复提交 `deca731`；详见 `docs/lab2-test/defect-ledger.md#2bug-1上下文窗口表从未生效`
+",Medium,"功能性,静态规范",In Review
+[BUG-2][FP-01] core stop 会杀错同机另一份副本的 daemon,"## 现象
+同机两份副本（7438/7439）时，任一份执行 `iwan core stop` 都可能把另一份的 daemon 杀掉；`core status` 也不区分实例。
+
+## 复现步骤
+1. 副本 A 用 7438 起 daemon；副本 B 的 `.env` 改成 7439 也起一份
+2. 在 B 里执行 `iwan core stop`
+3. 回 A 执行 `iwan core status`，观察 A 的 daemon 是否还活着
+
+## 期望 / 实际
+- 期望：各实例 stop 只影响自己；重复 stop 幂等；status 只报目标端口实例
+- 实际（修复前）：共享 PID 文件被覆盖，stop 按“别人的 PID”执行 taskkill
+
+## 根因
+`cli/commands/core.py` 的 `~/.iwan/iwan-core.pid` 与 `cli/daemon_guard.py` 的 `~/.iwan/daemon.pid` 都是用户级共享路径。
+
+## 修复
+PID 文件按端口分文件（`~/.iwan/pids/iwan-core-<port>.pid`）；内容升级为 JSON（pid/host/port/started_at/cwd）；读取时校验端口一致 + 进程存活；status 输出带 pid；重复 stop 幂等；兼容旧纯数字文件。
+
+## 自测证据
+`tests/unit/test_core_pid_isolation.py`（14 条）：两端口各写一条记录，只对 7438 执行 stop，断言 7439 的记录文件仍在。
+
+## 位置与提交
+修复提交 `e713b1d`；详见 `docs/lab2-test/defect-ledger.md#3bug-2iwan-core-stop-会杀错实例`
+",High,"功能性,可靠性",In Review
+[BUG-3][FP-03] GUI 连到外部 daemon 无任何提示,"## 现象
+GUI 只要能连上目标端口就直接用，不校验对方是谁。两份副本端口撞车时静默连到另一份 daemon——跑的是别人的后端代码，改 `src/` 却“完全不生效”，界面上没有任何提示。
+
+## 复现步骤
+1. 副本 A 起 7438 daemon
+2. 副本 B 的 `.env` 保持 7438（或端口撞车），启动 GUI
+3. 在 B 里改 `src/` 代码，重跑对话：行为不变；界面无任何异常提示
+
+## 期望 / 实际
+- 期望：连上后显示“已连接外部 daemon（路径）”，让人立刻知道改错仓库了
+- 实际（修复前）：完全静默
+
+## 根因
+`core.ping` 只返回 `server_version` + `uptime_ms`，协议层没有“我是哪个仓库”的信息。
+
+## 修复
+新增只读命令 `core.info`（返回 cwd / repo_root / config_path / port）；GUI 连上后比对仓库根，不一致时顶栏常驻「外部 daemon」chip + 主区红色横幅；同仓库场景界面零变化；已重生成 `WIRE_PROTOCOL.md` 与 TS 类型。
+
+## 自测证据
+`tests/integration/test_core_info_ipc.py`（3 条，真起 daemon）+ `tests/unit/test_core_info_repo_root.py`（4 条）；`npm run typecheck` 与 `build` 通过。GUI 截图待补（P2 冒烟深度）。
+
+## 位置与提交
+修复提交 `f5c98d3`；详见 `docs/lab2-test/defect-ledger.md#4bug-3gui-连上外部-daemon-毫无提示`
+",Medium,"功能性,用户文档",In Review
+[BUG-4][FP-06] 三档预设退化：三档等价 / 混厂商模型名 404 / 预设窗口是死字段,"## 现象
+1. 只配 `IWAN_LLM_DEFAULT_MODEL=deepseek-chat` 时，fast/balanced/powerful 三档解析出同一模型，切档无任何效果；
+2. 内置表混着两家服务商的模型名（`deepseek-chat` / `claude-sonnet-4-6` / `claude-opus-4-1-20250805`），`default_model` 为空时会把 claude 名字发给 DeepSeek 端点 → 404；
+3. `ModelPreset.context_window` 是死字段：provider 只认 `[llm] context_window`，预设里的 64K/128K/200K 从未被读取。
+
+## 复现步骤
+1. 只配 `[llm] default_model = ""deepseek-chat""`，不配 `[llm.presets]`
+2. 依次 `/model fast|balanced|powerful`，观察实际调用的模型
+3. 把 `base_url` 指向 deepseek、`default_model` 置空，触发一次对话，观察 404
+4. 代码层：`resolve_preset('powerful', {}, 'deepseek-chat').context_window` 仍为 200000
+
+## 修复
+① 三档等价保留为合理默认但留 debug 说明（区分三档的正解是配 `[llm.presets]`）；② 新增厂商错配检查，模型前缀与 base_url 厂商不一致时打明确 warning（含 404 与修法）；③ 预设窗口改为活字段：按解析后的模型查表，并在未显式配置时作为 provider 的分母。
+
+## 自测证据
+`tests/unit/test_model_preset_window.py`（11 条）：powerful→deepseek-chat 必须 128K 而非 200K；档位窗口真的进 provider；错配告警含 404 与修法。
+
+## 位置与提交
+修复提交 `deca731`；详见 `docs/lab2-test/defect-ledger.md#5bug-4三档预设退化成同一个模型`
+",High,功能性,In Review
+[BUG-5][FP-09] 客户端异常断开时 daemon 喷整段 traceback,"## 现象
+强杀 GUI/TUI（或客户端异常断连）后，`~/.iwan/logs/core.log` 出现一大段 asyncio 回溯，末尾是 `ConnectionResetError: [WinError 64] 指定的网络名不再可用`。daemon 不崩，但日志被污染。
+
+## 复现步骤
+1. 起 daemon（GUI 或 `uv run iwan-core`）
+2. 强杀客户端：`Get-Process electron | Stop-Process -Force`
+3. `Get-Content ""$env:USERPROFILE\.iwan\logs\core.log"" -Tail 20`
+
+## 期望 / 实际
+- 期望：只记一行 debug/info；daemon 继续接受新连接
+- 实际（修复前）：整段 Traceback
+
+## 根因
+`transport/socket_server.py::_read_loop` 只 `except asyncio.LimitOverrunError`；RST 让 `readline()` 抛 `OSError` 子类后冒泡到 `_handle_connection` 的 task，asyncio 异常处理器打出回溯。`_authenticate` 同理；`_handle_line` 的错误分支用裸 `_send()` 回包。
+
+## 修复
+两处 readline 增加 `except OSError` → 记 debug 后收摊；新增 `_send_quietly()` 供错误/拒绝应答使用；handler 内部异常仍走 `logger.exception`，不吞真实错误。
+
+## 自测证据
+`tests/unit/test_socket_server_disconnect.py`（5 条）：用 `transport.abort()` 制造 RST，断言无 ERROR 日志、无 Traceback、asyncio 异常处理器无未处理异常、断连后仍能服务新连接。
+
+## 位置与提交
+修复提交 `cec2966`；详见 `docs/lab2-test/defect-ledger.md#6bug-5客户端异常断开时-daemon-喷整段-traceback`
+",Low,可靠性,In Review

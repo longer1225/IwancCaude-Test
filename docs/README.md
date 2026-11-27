@@ -59,6 +59,20 @@ README「界面速览」的七帧原图（devtest capturePage 拍摄，勿手动
 
 - `index.md` — 早期自动生成的 API 列表，**已过时**，无引用；确认无用可直接删除。
 
+## lab2-test/ — 课程《软件项目管理与评测技术》项目测试实践（team2）
+
+课程实验二的团队测试文档区：需求基线（轻量 SRS）、缺陷台账、静态与覆盖率基线、用户文档核对表、Linear 落地指引。
+**网页上直接读 md；要交作业的 docx 在 `submission/`。**
+
+| 文档 | 一句话说明 |
+|---|---|
+| [lab2-test/README.md](lab2-test/README.md) | 入口与进度账：谁该读哪份、当前里程碑状态、团队约定（用例编号、被测版本锁定、缺陷单归属） |
+| [requirements-baseline.md](lab2-test/requirements-baseline.md) | 需求基线（轻量 SRS）：14 个功能点 × 8 字段（入口/前置/正常流/异常分支/验收点/代码来源/用例条数）、57 个配置变量、追溯矩阵、已知缺陷注意 |
+| [defect-ledger.md](lab2-test/defect-ledger.md) | 缺陷台账 BUG-1—BUG-5：现象/复现/根因/修复/自测证据/回归要点，含给测试组的三联回归清单 |
+| [test-baseline-report.md](lab2-test/test-baseline-report.md) | 静态扫描（ruff/mypy/bandit）与四模块分支覆盖率基线 + config.py 补测建议 |
+| [user-doc-checklist.md](lab2-test/user-doc-checklist.md) | 用户文档一致性核对表（15 条，对齐 README/RUNBOOK/TEAM_SETUP 与代码） |
+| [linear-guide.md](lab2-test/linear-guide.md) | Linear 落地指引：Project/Cycle/Label/Priority、CSV 导入、截图与导出清单、常见坑 |
+
 ## 推荐复盘路线
 
 1. **安全线**（当前主线）：`plans/S9_security_rollback_plan.md` → `design/permission-modes.md` → `design/hooks.md` → `architecture/sandbox-deep-dive.md` → `architecture/permission-manager-notes.md`，外部事实对照 `learning/claudecode-sandbox-research-2026-09.md`。
