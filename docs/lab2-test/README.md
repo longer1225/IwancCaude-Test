@@ -16,7 +16,11 @@
 | 测试负责人（刘显尘） | [requirements-baseline.md](requirements-baseline.md) → 第 4、5 节 | 设计用例、填追溯矩阵、写《测试方案》 |
 | 文档测试员（龚让） | [user-doc-checklist.md](user-doc-checklist.md) | 逐条核对 README/RUNBOOK/TEAM_SETUP，填结论与缺陷号 |
 | 易用性与配置测试员（康泽祎） | [requirements-baseline.md](requirements-baseline.md) 第 3 节 + [test-baseline-report.md](test-baseline-report.md) | 搭隔离环境、按功能点设计易用性任务 |
-| 开发与修复（龙嘉璟） | [design-notes.md](design-notes.md) | **设计说明（测试视角）**：分层与调用链、模块依赖、数据落盘、权限判定链、并发与事件、错误码、可测性钩子、FP→设计要点速查（对应计划 7.1 的“设计架构说明”职责） | v1.0（2026-11-27） |
+| 开发与修复（龙嘉璟） | [defect-template.md](defect-template.md) | **缺陷单模板**：标题格式、9.2 的 8 个字段、严重度判定、建单后必做三件事 | v1.0 |
+| [regression-guide.md](regression-guide.md) | **回归指南**：三联回归三条、开发/测试两方各贴什么、09_回归记录怎么填、12-10 开发方要跑的 5 条用例 | v1.0 |
+| [review-notes.md](review-notes.md) | **评审与会议材料**：12-04 方案评审 10 项检查表、答辩 6 问、例会纪要模板、中期报告 5 组数据 | v1.0 |
+| [scripts/](scripts/) | 双实例与隔离环境脚本（7438/7439 + 6 个改道变量），首轮执行与 BUG-2 回归用 | v1.0 |
+| [design-notes.md](design-notes.md) | **设计说明（测试视角）**：分层与调用链、模块依赖、数据落盘、权限判定链、并发与事件、错误码、可测性钩子、FP→设计要点速查（对应计划 7.1 的“设计架构说明”职责） | v1.0（2026-11-27） |
 | [defect-ledger.md](defect-ledger.md) | 缺陷复现、修复、自测证据留痕 |
 | 所有人 | [linear-guide.md](linear-guide.md) | Linear 怎么用、字段怎么填、该截哪些图 |
 

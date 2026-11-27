@@ -318,22 +318,24 @@
 
 ## 5　追溯矩阵（功能点 → 接口 → 代码 → 用例）
 
-| 功能点 | 主要 RPC / 事件 | 代码位置（缺陷定位用） | 用例编号（测试组填写） |
-|---|---|---|---|
-| FP-01 | CLI：core start/stop/status | cli/commands/core.py |  |
-| FP-02 | （无 RPC，客户端侧）core.ping 探活 | cli/daemon_guard.py |  |
-| FP-03 | core.ping / core.info | core/transport/socket_server.py |  |
-| FP-04 | session.create / session.send_message / run.start；run.* 事件 | core/app.py, core/runner.py |  |
-| FP-05 | session.set_engine；session.engine_changed | core/app.py |  |
-| FP-06 | llm.config.get/set/test；llm.set_preset | core/model_presets.py, core/context_window.py |  |
-| FP-07 | run.cancel / run.steer | core/app.py, core/runner.py |  |
-| FP-08 | session.compact；context.compacted；session.checkpoint.* | core/compactor.py, core/app.py |  |
-| FP-09 | permission.requested/respond/granted/denied；tool.call_* | core/permissions/manager.py, core/app.py |  |
-| FP-10 | trust.requested/respond/list/revoke；hook.evaluated；session.set_permission_mode | core/permissions/manager.py, core/trust.py, core/hooks.py |  |
-| FP-11 | （工具内部）read/write/edit/list/search | core/sandbox.py, core/fs_ops.py |  |
-| FP-12 | files.changes / files.restore | core/shadow.py, core/app.py |  |
-| FP-13 | workspace.delete；files.* / git.* 事件 | core/app.py |  |
-| FP-14 | events.jsonl / trace / llm.usage | core/trace/writer.py, core/events/* |  |
+| 功能点 | 主要 RPC / 事件 | 代码位置（缺陷定位用） | 基线锁定 | 用例编号（测试组填写） |
+|---|---|---|---|---|
+| FP-01 | CLI：core start/stop/status | cli/commands/core.py | b3c4363 |  |
+| FP-02 | （无 RPC，客户端侧）core.ping 探活 | cli/daemon_guard.py | b3c4363 |  |
+| FP-03 | core.ping / core.info | core/transport/socket_server.py | b3c4363 |  |
+| FP-04 | session.create / session.send_message / run.start；run.* 事件 | core/app.py, core/runner.py | b3c4363 |  |
+| FP-05 | session.set_engine；session.engine_changed | core/app.py | b3c4363 |  |
+| FP-06 | llm.config.get/set/test；llm.set_preset | core/model_presets.py, core/context_window.py | b3c4363 |  |
+| FP-07 | run.cancel / run.steer | core/app.py, core/runner.py | b3c4363 |  |
+| FP-08 | session.compact；context.compacted；session.checkpoint.* | core/compactor.py, core/app.py | b3c4363 |  |
+| FP-09 | permission.requested/respond/granted/denied；tool.call_* | core/permissions/manager.py, core/app.py | b3c4363 |  |
+| FP-10 | trust.requested/respond/list/revoke；hook.evaluated；session.set_permission_mode | core/permissions/manager.py, core/trust.py, core/hooks.py | b3c4363 |  |
+| FP-11 | （工具内部）read/write/edit/list/search | core/sandbox.py, core/fs_ops.py | b3c4363 |  |
+| FP-12 | files.changes / files.restore | core/shadow.py, core/app.py | b3c4363 |  |
+| FP-13 | workspace.delete；files.* / git.* 事件 | core/app.py | b3c4363 |  |
+| FP-14 | events.jsonl / trace / llm.usage | core/trace/writer.py, core/events/* | b3c4363 |  |
+
+> 基线锁定口径：全部功能点对应 Git 提交 `b3c4363`（2026-11-23 项目认定后冻结）；缺陷修复在 tag `lab2-fixes-verified` 上，回归时切到该 tag。
 
 > 用例编号建议格式：`FP-09-C-01`（功能点-类型-序号，类型 C=functional 功能、B=boundary 边界、E=error 异常、U=usability 易用、D=doc 文档）。
 
@@ -385,3 +387,17 @@
 |---|---|---|---|
 | v1.0 | 2026-11-26 | 首个基线版本：锁定 14 个功能点口径、57 个配置变量、追溯矩阵、已知缺陷注意项、用户文档核对表模板 | 龙嘉璟 |
 | v1.1 | 2026-11-27 | 按《测试计划》5.1/5.2 对齐口径：仍为 FP-01—FP-14，新增 4.1 P2 冒烟项（SM-01—SM-07）与 4.2 范围外项（EX-01—EX-06）；同步产出 Excel 用例表 test-cases.xlsx | 龙嘉璟 |
+
+## 附录 C　已知限制与测试前提
+
+来自《测试计划》2.3 与实测补充。用例的前置条件若缺这几条，执行结论会被环境因素污染。
+
+| 编号 | 已知限制 / 前提 | 对测试的要求 |
+|---|---|---|
+| L-01 | 模型调用依赖外部 LLM API Key；无 Key 时完整对话链路不可用 | 无 Key 环境只跑离线路径（daemon 生命周期、ping、配置解析、单测）；少量端到端用受控测试 Key 并限流 |
+| L-02 | GUI（Electron）依赖 npm install（约 350 MB）且仍在开发中 | 只做安装启动 + 主界面 + 基础对话冒烟（SM-01），不展开复杂面板 |
+| L-03 | Layer 3（操作系统级强制隔离）尚未实现 | 不纳入测试范围（5.2 / EX-06），用例与报告都不涉及 |
+| L-04 | daemon 与测试过程会写用户目录（~/.iwan、~/.iwan_claude） | 统一用 IWAN_TRACE_FILE / IWAN_MEMORY_DIR / IWAN_SESSIONS_DIR / IWAN_POLICY_FILE / IWAN_TRUST_FILE / IWAN_SECRETS_FILE 改道到 runs/evidence/ |
+| L-05 | 被测代码锁定在 Git 提交 b3c4363 | 测试周期内不跟随上游新功能；修复提交在 tag lab2-fixes-verified 上，回归时切 tag |
+| L-06 | 副本 .env 显式写了 IWAN_PORT=7438 与 IWAN_LLM_CONTEXT_WINDOW=128000 | 这两行优先级高于代码默认值：涉及端口/窗口的用例必须把它们写进前置条件（否则 BUG-1 测不出来） |
+| L-07 | Linear 工作区（iwanclaude-test）没有 In Review 状态，只有 Backlog/Todo/In Progress/Done/Canceled/Duplicate | 严格流程用 Todo 暂存待验证；本团队按“已修复并自测通过”先置 Done，回归记录写在评论里 |
