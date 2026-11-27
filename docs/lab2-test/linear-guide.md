@@ -93,3 +93,68 @@ Get-Content docs\lab2-test\linear-import.csv -TotalCount 5
 3. **免费版 AI 额度有限**：AI 摘要/聚类只用于演示与关键单，别把全流程压在上面；定期导出 CSV 备份。
 4. **关单前必须有回归记录**：没有评论证据就拖 `Done`，评审时会被追问"怎么验证的"。
 5. **状态别乱用**：`Canceled` 表示"不是缺陷/不修"，需要在评论里写理由（例如 BUG-TASKS 附 2 列出的"这些不是 bug"）。
+
+---
+
+## 6　在别人的工作区 / 别的团队下怎么做
+
+结论：**能做，但权限不同，路径不同**。你（龙嘉璟）是"成员"而不是 workspace owner，所以：
+
+| 你想做的 | 成员权限下能否做 | 做法 |
+|---|---|---|
+| 建 Issue（缺陷单） | ✅ 通常可以 | 直接在对方的 Team 下建；标题加 `[BUG-x][FP-xx]` 前缀，Label 用他们已有的（没有就按要求请管理员建） |
+| 挂 Project / Cycle | 🟡 看角色：能建 issue 通常能选已有 Project；**没有 Project 时无法自建** | 先问清楚：团队里是否已有 Project 与 Cycle。没有就让 owner 建一次，或退而用 Label/里程碑替代 |
+| 建 Team / Project / Cycle / Label | ❌ 一般要 admin/owner | 把 `docs/lab2-test/linear-guide.md` 第 1 节直接发给 owner，让他照着建（10 分钟） |
+| CSV 批量导入 | 🟡 常见限制：**导入通常是 workspace 级操作** | 先试一次（Project → `...` → Import issues）；若无入口，走下面两条备选 |
+| 导出 CSV / Insights | ✅ 一般可以 | Project → Insights → Export |
+| 调 API 建单 | ✅ 用**你个人的** Personal API Key 即可（权限随你的成员角色） | 见第 7 节 |
+
+**没有导入权限时的两条备选（都不影响证据链）**
+
+1. **手工建 5 条**：把 `linear-import.csv` 用 Excel/记事本打开，每条把 `Title` 复制成标题、`Description` 整体粘贴进描述框（保留 markdown 就能渲染），Priority/Labels 手选。5 条大约 10 分钟。
+2. **请 owner 代导**：把 `docs/lab2-test/linear-import.csv` 发给他，让他按第 2 节导入；导入后你把 5 条 assign 给"龙嘉璟（发现/修复）"，关单前再转"刘显尘（验证）"。
+
+**归属怎么填**（已写进 CSV 每条描述的开头）：
+
+```
+> 发现人：龙嘉璟　修复：龙嘉璟　自测验证：龙嘉璟　关单：待测试负责人复核
+```
+
+如果对方工作区的 issue 有自定义字段（如"发现人/验证人"），把这两列按上面填；没有自定义字段就写进描述第一行，效果一样。
+
+---
+
+## 7　把 API Key 交给自动化（可选，仅当想让脚本批量建单时）
+
+Linear 的 Key 是**个人级**的，不绑定 workspace，所以你在别人的工作区里也能生成、也只会拥有你作为成员应有的权限。
+
+**生成**：Linear → 左下头像 → `Settings` → `API` → `Personal API keys` → `Create key` → 复制 `lin_api_...`（只显示一次）。
+
+**交给脚本的三种方式（从安全到宽松）**
+
+```powershell
+# 方式 A（推荐）：只在当前 PowerShell 会话里设，关窗即失效
+$env:LINEAR_API_KEY = "lin_api_xxxxxxxx"
+
+# 方式 B：写到一个仓库外的文件，用的时候读进来（别放进任何 git 仓库）
+[System.IO.File]::WriteAllText("$env:USERPROFILE\.linear_key", "lin_api_xxxxxxxx")
+
+# 方式 C：临时粘给我，我读完立刻 unset —— 不推荐，因为会留在会话记录里
+```
+
+**安全边界（我会遵守）**
+
+1. Key 只从环境变量读，**绝不写进仓库、日志或提交信息**；
+2. 只用它做三类操作：查 `teams`/`projects`/`workflowStates`/`labels`、建 5 条 issue、给 issue 挂 label/assignee；
+3. 不删除、不修改别人的 issue，不动账号与成员设置；
+4. 用完请你到 `Settings → API` 里 **Revoke** 该 key（一次性使用更稳妥）。
+
+**我拿到 key 后会做的具体步骤**（你确认后执行）：
+
+1. `query { teams { nodes { id key name } } }` —— 确认团队 key（最好已是 `IWAN`）；
+2. 查该团队的 `workflowStates`（拿到 `In Review` 的 stateId）与 `labels`（缺的功能性/易用性等名字会告诉你，不擅自新建）；
+3. 对 5 条缺陷调 `issueCreate`，把描述写进正文，返回的 `identifier`（如 `IWAN-12`）写回 `docs/lab2-test/defect-ledger.md`；
+4. 提交一条 `docs(lab2): 回填 Linear 缺陷号` 的 commit 并推送；
+5. 把 5 个 `IWAN-xx` 号回报给你，并提示你 revoke key。
+
+> 如果你不想给 key：**完全不用给**。手工建 5 条 + 我这边 CSV 已经很完整，缺的只是"issue 号回填台账"这一步，你建完把号发我，我改台账再推一次即可。

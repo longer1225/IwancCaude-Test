@@ -1,5 +1,8 @@
 ﻿Title,Description,Priority,Labels,Status
-[BUG-1][FP-06] 上下文窗口表从未生效：不配窗口时一律按 128K 计算,"## 现象
+[BUG-1][FP-06] 上下文窗口表从未生效：不配窗口时一律按 128K 计算,"> 发现人：龙嘉璟　修复：龙嘉璟　自测验证：龙嘉璟　关单：待测试负责人复核
+> 环境：Windows 11 · commit `b3c4363` · 端口 7438 · 离线（假 Key + 死端点）
+
+## 现象
 不配 `IWAN_LLM_CONTEXT_WINDOW` 时，任何模型都按 128000 算上下文占用率；内置表只有 3 个 claude 模型、没有 deepseek；未知模型一律静默返回 200000。
 
 ## 复现步骤
@@ -24,7 +27,10 @@
 ## 位置与提交
 修复提交 `deca731`；详见 `docs/lab2-test/defect-ledger.md#2bug-1上下文窗口表从未生效`
 ",Medium,"功能性,静态规范",In Review
-[BUG-2][FP-01] core stop 会杀错同机另一份副本的 daemon,"## 现象
+[BUG-2][FP-01] core stop 会杀错同机另一份副本的 daemon,"> 发现人：龙嘉璟　修复：龙嘉璟　自测验证：龙嘉璟　关单：待测试负责人复核
+> 环境：Windows 11 · commit `b3c4363` · 端口 7438 · 离线（假 Key + 死端点）
+
+## 现象
 同机两份副本（7438/7439）时，任一份执行 `iwan core stop` 都可能把另一份的 daemon 杀掉；`core status` 也不区分实例。
 
 ## 复现步骤
@@ -48,7 +54,10 @@ PID 文件按端口分文件（`~/.iwan/pids/iwan-core-<port>.pid`）；内容�
 ## 位置与提交
 修复提交 `e713b1d`；详见 `docs/lab2-test/defect-ledger.md#3bug-2iwan-core-stop-会杀错实例`
 ",High,"功能性,可靠性",In Review
-[BUG-3][FP-03] GUI 连到外部 daemon 无任何提示,"## 现象
+[BUG-3][FP-03] GUI 连到外部 daemon 无任何提示,"> 发现人：龙嘉璟　修复：龙嘉璟　自测验证：龙嘉璟　关单：待测试负责人复核
+> 环境：Windows 11 · commit `b3c4363` · 端口 7438 · 离线（假 Key + 死端点）
+
+## 现象
 GUI 只要能连上目标端口就直接用，不校验对方是谁。两份副本端口撞车时静默连到另一份 daemon——跑的是别人的后端代码，改 `src/` 却“完全不生效”，界面上没有任何提示。
 
 ## 复现步骤
@@ -72,7 +81,10 @@ GUI 只要能连上目标端口就直接用，不校验对方是谁。两份副�
 ## 位置与提交
 修复提交 `f5c98d3`；详见 `docs/lab2-test/defect-ledger.md#4bug-3gui-连上外部-daemon-毫无提示`
 ",Medium,"功能性,用户文档",In Review
-[BUG-4][FP-06] 三档预设退化：三档等价 / 混厂商模型名 404 / 预设窗口是死字段,"## 现象
+[BUG-4][FP-06] 三档预设退化：三档等价 / 混厂商模型名 404 / 预设窗口是死字段,"> 发现人：龙嘉璟　修复：龙嘉璟　自测验证：龙嘉璟　关单：待测试负责人复核
+> 环境：Windows 11 · commit `b3c4363` · 端口 7438 · 离线（假 Key + 死端点）
+
+## 现象
 1. 只配 `IWAN_LLM_DEFAULT_MODEL=deepseek-chat` 时，fast/balanced/powerful 三档解析出同一模型，切档无任何效果；
 2. 内置表混着两家服务商的模型名（`deepseek-chat` / `claude-sonnet-4-6` / `claude-opus-4-1-20250805`），`default_model` 为空时会把 claude 名字发给 DeepSeek 端点 → 404；
 3. `ModelPreset.context_window` 是死字段：provider 只认 `[llm] context_window`，预设里的 64K/128K/200K 从未被读取。
@@ -92,7 +104,10 @@ GUI 只要能连上目标端口就直接用，不校验对方是谁。两份副�
 ## 位置与提交
 修复提交 `deca731`；详见 `docs/lab2-test/defect-ledger.md#5bug-4三档预设退化成同一个模型`
 ",High,功能性,In Review
-[BUG-5][FP-09] 客户端异常断开时 daemon 喷整段 traceback,"## 现象
+[BUG-5][FP-09] 客户端异常断开时 daemon 喷整段 traceback,"> 发现人：龙嘉璟　修复：龙嘉璟　自测验证：龙嘉璟　关单：待测试负责人复核
+> 环境：Windows 11 · commit `b3c4363` · 端口 7438 · 离线（假 Key + 死端点）
+
+## 现象
 强杀 GUI/TUI（或客户端异常断连）后，`~/.iwan/logs/core.log` 出现一大段 asyncio 回溯，末尾是 `ConnectionResetError: [WinError 64] 指定的网络名不再可用`。daemon 不崩，但日志被污染。
 
 ## 复现步骤
