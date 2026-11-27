@@ -36,7 +36,7 @@
 | 一般（功能局部异常、有规避路径） | Medium |
 | 轻微（界面提示、文字微瑕） | Low |
 
-6. 状态机用默认的 `Backlog → Todo → In Progress → In Review → Done`，这正是计划 9.1 的闭环；**验证不通过就把单子退回 Todo**（Reopen）。
+6. 状态机：本工作区只有 `Backlog / Todo / In Progress / Done / Canceled / Duplicate`，**没有 `In Review`**。走严格流程时可先置 `Todo`，回归后置 `Done`；若想要 `In Review`，需要 owner 在 Team → Workflow 里加一个状态。
 
 ---
 
@@ -47,7 +47,7 @@
 1. Linear → 打开 Project → `Issues` → 右上 `...` → **Import issues** → 选择 `CSV`；
 2. 上传 `docs/lab2-test/linear-import.csv`；
 3. 映射列（Linear 会让你逐列对应）：Title→Title，Description→Description，Priority→Priority，Labels→Labels，Status→Status；
-4. 导入后逐单检查：`Status` 默认是 `In Review`（对应计划 9.1 的"回归验证"态）。**如果团队希望直接记完成，把该列改成 `Done` 再导**；但按计划 2.2，关单权限在测试负责人，建议留 `In Review` 走一次回归。
+4. 导入后逐单检查：`Status` 为 `Done`（本团队口径：已测试并修复）。该工作区没有 `In Review` 状态；若要严格走《测试计划》9.1，把该列改成 `Todo`，回归后再置 `Done`。
 
 > 导入后建议立刻做的事：给 5 条单各挂上 `Cycle 2 · 第一轮回归`，Assignee 先给刘显尘（验证人），需要开发看时再 @ 龙嘉璟。
 
@@ -95,6 +95,20 @@ Get-Content docs\lab2-test\linear-import.csv -TotalCount 5
 5. **状态别乱用**：`Canceled` 表示"不是缺陷/不修"，需要在评论里写理由（例如 BUG-TASKS 附 2 列出的"这些不是 bug"）。
 
 ---
+
+## 5.5　本团队的实际落地状态（2026-11-27 已打通）
+
+| 项 | 实际情况 |
+|---|---|
+| Workspace / Team | workspace `iwanclaude-test`，team `Iwanclaude_test`，**团队 key = `IWA`** → 缺陷号形如 `IWA-5` |
+| 已建缺陷单 | [`IWA-5`](https://linear.app/iwanclaude-test/issue/IWA-5)、`IWA-6`、`IWA-7`、`IWA-8`、`IWA-9`（对应 BUG-1—BUG-5） |
+| 当前状态 | 全部 `Done`（按“已测试并修复”口径）；该工作区**没有 `In Review` 状态**，严格流程可先改 `Todo` 再回归 |
+| 标签 | 已建 5 个：`功能性` `易用性` `用户文档` `静态规范` `可靠性`（原有 `Bug`/`Feature`/`Improvement` 保留） |
+| Project | **尚未创建**（API key 权限不足，只有 Read + Create issues）；建议 owner 在界面建 Project「项目测试实践」后，把这 5 条批量挂进去 |
+| Cycle | 未创建，同上 |
+| 建单方式 | 通过 GraphQL `issueCreate` 脚本创建（`runs/_linear_create.py`），描述与仓库 `linear-import.csv` 同源 |
+
+> 下一步建议：owner 建 Project + 3 个 Cycle，然后把 `IWA-5—IWA-9` 批量设置 Project=`项目测试实践`、Cycle=`Cycle 2`；再按第 4 节截 6 张图。
 
 ## 6　在别人的工作区 / 别的团队下怎么做
 

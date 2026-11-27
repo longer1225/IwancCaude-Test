@@ -24,7 +24,7 @@
 | 文档 | 内容 | 状态 |
 |---|---|---|
 | [requirements-baseline.md](requirements-baseline.md) | 需求基线（轻量 SRS）：14 个功能点 × 8 字段、57 个配置变量、追溯矩阵、已知缺陷注意、待确认问题 | v1.0（2026-11-26） |
-| [defect-ledger.md](defect-ledger.md) | 缺陷台账：BUG-1—BUG-5 的现象/复现/根因/修复/自测证据/回归步骤 | 5 条均已修复并自测通过，待回归关闭 |
+| [defect-ledger.md](defect-ledger.md) | 缺陷台账：BUG-1—BUG-5 的现象/复现/根因/修复/自测证据/回归步骤；已在 Linear 建单 **IWA-5—IWA-9**（团队 `Iwanclaude_test`，状态 Done） | 已修复并自测通过 |
 | [test-baseline-report.md](test-baseline-report.md) | 静态扫描（ruff/mypy/bandit）与四模块分支覆盖率基线 + 补测建议 | v1.0（2026-11-26） |
 | [user-doc-checklist.md](user-doc-checklist.md) | 用户文档一致性核对表（15 条，待填结论） | 待龚让填写 |
 | [linear-guide.md](linear-guide.md) | Linear 落地指引：Project/Cycle/Label/Priority、CSV 导入、截图与导出清单 | v1.0 |
