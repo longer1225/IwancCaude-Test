@@ -16,7 +16,8 @@
 | 测试负责人（刘显尘） | [requirements-baseline.md](requirements-baseline.md) → 第 4、5 节 | 设计用例、填追溯矩阵、写《测试方案》 |
 | 文档测试员（龚让） | [user-doc-checklist.md](user-doc-checklist.md) | 逐条核对 README/RUNBOOK/TEAM_SETUP，填结论与缺陷号 |
 | 易用性与配置测试员（康泽祎） | [requirements-baseline.md](requirements-baseline.md) 第 3 节 + [test-baseline-report.md](test-baseline-report.md) | 搭隔离环境、按功能点设计易用性任务 |
-| 开发与修复（龙嘉璟） | [defect-ledger.md](defect-ledger.md) | 缺陷复现、修复、自测证据留痕 |
+| 开发与修复（龙嘉璟） | [design-notes.md](design-notes.md) | **设计说明（测试视角）**：分层与调用链、模块依赖、数据落盘、权限判定链、并发与事件、错误码、可测性钩子、FP→设计要点速查（对应计划 7.1 的“设计架构说明”职责） | v1.0（2026-11-27） |
+| [defect-ledger.md](defect-ledger.md) | 缺陷复现、修复、自测证据留痕 |
 | 所有人 | [linear-guide.md](linear-guide.md) | Linear 怎么用、字段怎么填、该截哪些图 |
 
 ## 2　文档清单
