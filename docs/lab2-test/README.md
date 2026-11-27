@@ -23,8 +23,8 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| [**test-cases.xlsx**](test-cases.xlsx) | **测试用例表（日常填写主战场）**：22 个功能点总表、44 行用例骨架、70 条命令覆盖矩阵、41 个事件清单、57 个配置变量、缺陷台账、统计公式、变更记录 | v1.1（2026-11-27） |
-| [requirements-baseline.md](requirements-baseline.md) | 需求基线（轻量 SRS）：22 个功能点 × 8 字段、57 个配置变量、追溯矩阵、已知缺陷注意、待确认问题 | v1.1（2026-11-27） |
+| [**test-cases.xlsx**](test-cases.xlsx) | **测试用例表（日常填写主战场）**：14 个功能点总表、43 行用例骨架（含 7 项 P2 冒烟）、70 条命令归属矩阵（FP / SM / 范围外）、41 个事件、57 个配置变量、缺陷台账、统计公式、变更记录 | v1.1（2026-11-27） |
+| [requirements-baseline.md](requirements-baseline.md) | 需求基线（轻量 SRS）：14 个功能点 × 8 字段、4.1 节 P2 冒烟项 7 条、4.2 节范围外项 6 条、57 个配置变量、追溯矩阵、已知缺陷注意 | v1.1（2026-11-27） |
 | [defect-ledger.md](defect-ledger.md) | 缺陷台账：BUG-1—BUG-5 的现象/复现/根因/修复/自测证据/回归步骤；已在 Linear 建单 **IWA-5—IWA-9**（团队 `Iwanclaude_test`，状态 Done） | 已修复并自测通过 |
 | [test-baseline-report.md](test-baseline-report.md) | 静态扫描（ruff/mypy/bandit）与四模块分支覆盖率基线 + 补测建议 | v1.0（2026-11-26） |
 | [user-doc-checklist.md](user-doc-checklist.md) | 用户文档一致性核对表（15 条，待填结论） | 待龚让填写 |
