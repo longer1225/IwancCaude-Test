@@ -1,7 +1,7 @@
-# 需求基线（轻量 SRS）v1.0
+# 需求基线（轻量 SRS）v1.1
 
 > **团队**：team2　**被测版本**：Git 提交 `b3c4363`　**编制**：龙嘉璟（开发与修复负责人）
-> **状态**：v1.0（2026-11-26）｜本文件与 `submission/需求基线_轻量SRS_v1.0_team2.docx` 同源，内容一致
+> **状态**：v1.1（2026-11-27）｜本文件与 `submission/需求基线_轻量SRS_v1.1_team2.docx` 同源，内容一致
 > **面向**：测试组（刘显尘、龚让、康泽祎）；读这一份就知道“要测什么、从哪进、什么算过”
 
 ## 0　这份文档解决什么问题
@@ -116,9 +116,9 @@
 | IWAN_GITHUB_TOKEN | PR 面板令牌（测试会显式置空避免真联网） | 范围外（P2） |
 | IWAN_DISABLE_WIN_ENV_FALLBACK | 关闭 Windows 注册表环境变量兜底（单测/集成测试必开） | 全（测试隔离） |
 
-## 4　功能点基线（FP-01—FP-14）
+## 4　功能点基线（FP-01—FP-22）
 
-每个功能点固定 8 个字段。**“异常分支”是最容易漏测的一列**，建议按它逐条设计边界与错误推测用例。
+每个功能点固定 8 个字段。**“异常分支”是最容易漏测的一列**，建议按它逐条设计边界与错误推测用例。日常填写用配套 Excel：[`test-cases.xlsx`](test-cases.xlsx)（功能点总表 / 用例表 / 命令覆盖矩阵 / 事件清单 / 配置变量 / 缺陷台账 / 统计 / 变更记录）。
 
 ### FP-01　daemon 生命周期（P0）
 
@@ -288,6 +288,102 @@
 | 代码来源 | `core/trace/writer.py`、`core/events/*`、`core/app.py`（`_llm_config_snapshot` 的脱敏） |
 | 建议用例条数 | P1，1—3 条（改道 / 统计 / 脱敏） |
 
+### FP-15　SSH 连接与终端（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `ssh.conn_add/list/update/delete`、`ssh.host_trust`、`ssh.key_generate/status`、`ssh.term_open/write/resize/close` |
+| 前置条件 | 有一台可达的测试主机（或本地回环 sshd）；首次连接需确认主机指纹 |
+| 正常流（期望行为） | 加连接 → 信任主机 → 开终端（`term_open`）→ 写命令（`term_write`）→ 收到 `ssh.output` → 关终端；密钥可生成并查询状态 |
+| 异常分支（重点） | 未信任主机必须拒绝并回显指纹；凭据错误不得把密码写进日志/事件；对已关闭终端 `term_write` 要容错；连接删除后其终端不可再用 |
+| 验收点（怎么算过） | 连接 CRUD + 终端生命周期闭环；未信任路径有明确提示；`ssh.output` 与命令对应 |
+| 代码来源 | `core/ssh/connections.py`、`core/ssh/session.py`、`core/ssh/keys.py` |
+| 建议用例条数 | P2，1—2 条（连接闭环 + 未信任拒绝） |
+
+### FP-16　Git 面板操作（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `git.status/branches/log/commit/checkout/pull/push` |
+| 前置条件 | 工作区是 git 仓库；push/pull 需要 remote 与凭据，测试建议在临时克隆仓库里做 |
+| 正常流（期望行为） | status 报当前分支与改动；branches/log 正确列出；commit 把暂存改动落盘；checkout 切分支 |
+| 异常分支（重点） | 无 remote 时 push/pull 报错且不崩；commit 空消息应拒绝；pull 冲突要给可读提示而不是覆盖本地改动 |
+| 验收点（怎么算过） | 只读命令（status/branches/log）全通；写命令在临时仓库各做一次；失败路径有明确错误 |
+| 代码来源 | `core/gitpanel.py`、`core/app.py`（`_git_*_handler`） |
+| 建议用例条数 | P2，1—3 条（只读 / 本地写 / 失败路径） |
+
+### FP-17　工作流编排（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `workflow.list/get/save/delete/run/cancel/runs` |
+| 前置条件 | 已有可用的工作流定义（节点 + 依赖） |
+| 正常流（期望行为） | save 定义 → list/get 可查 → run 启动并产生 run 记录 → runs 查历史；cancel 中断运行 |
+| 异常分支（重点） | 定义非法（缺节点/成环/未知节点类型）应在保存或运行时明确报错；delete 不存在的工作流要幂等；运行中删除要给出明确结果 |
+| 验收点（怎么算过） | 定义 → 运行 → 查历史闭环；非法定义被拒且提示具体位置 |
+| 代码来源 | `core/workflow/store.py`、`core/workflow/engine.py`、`core/workflow/graph.py` |
+| 建议用例条数 | P2，1—2 条（闭环 + 非法定义） |
+
+### FP-18　定时任务（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `schedule.list/create/update/delete/run_now`；事件 `schedule.fired` |
+| 前置条件 | daemon 在跑；测试用分钟级 cron 或 `run_now`，不要等真实触发 |
+| 正常流（期望行为） | create 后 list 可见；update 改 cron/内容；`run_now` 立即执行一次并产生 run；delete 后不再出现 |
+| 异常分支（重点） | 非法 cron 表达式应拒绝并提示；删除不存在的任务幂等；到点触发失败要留可观测记录（事件或日志） |
+| 验收点（怎么算过） | CRUD + run_now 闭环；非法表达式被拒；`schedule.fired` 可观测 |
+| 代码来源 | `core/schedule.py`、`core/app.py`（`_schedule_*_handler`） |
+| 建议用例条数 | P2，1—2 条（CRUD+run_now / 非法 cron） |
+
+### FP-19　PR 评审（GitHub）（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `pr.context/list/create/review` |
+| 前置条件 | 本地 git 仓库可解析出 owner/repo；联网能力（list/create/review）需要 `IWAN_GITHUB_TOKEN` |
+| 正常流（期望行为） | `pr.context` 从本地 git 解析出 PR 所需上下文；有令牌时 `list` 拉取 PR 列表、`review` 起评审会话 |
+| 异常分支（重点） | 无令牌必须给出明确错误（不得静默返回空列表冒充“没有 PR”）；网络失败要有可读提示；`pr.create` 不得在未确认分支状态时推送 |
+| 验收点（怎么算过） | 无令牌路径错误清晰（离线可测）；有令牌时 list 返回真实数据；不产生意外 push |
+| 代码来源 | `core/pr.py`、`core/app.py`（`_pr_*_handler`） |
+| 建议用例条数 | P2，1 条（无令牌路径 + 本地 context） |
+
+### FP-20　插件系统（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `plugin.list/install/set_enabled`；事件 `plugin.changed` |
+| 前置条件 | `IWAN_PLUGINS_DIR` 改道到临时目录；准备一个合法的测试插件包 |
+| 正常流（期望行为） | install 从 URL/本地装到插件目录 → list 显示条目与启用状态 → set_enabled 切换并推 `plugin.changed` |
+| 异常分支（重点） | 非法 URL / 清单缺失 / 校验失败时应报错且不留下半装目录；重复安装要幂等或明确覆盖提示；禁用后再启用状态一致 |
+| 验收点（怎么算过） | 安装 → 列出 → 禁用 → 再启用闭环；失败安装无残留；事件可观测 |
+| 代码来源 | `core/plugins/registry.py`、`core/plugins/manifest.py` |
+| 建议用例条数 | P2，1—2 条（闭环 / 失败无残留） |
+
+### FP-21　MCP 扩展接入（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `mcp.status` |
+| 前置条件 | 配置里至少有一个 MCP 服务器项（可指向不存在的命令来测失败态） |
+| 正常流（期望行为） | status 返回每个 MCP 服务器的名称、连接状态与工具数量 |
+| 异常分支（重点） | 服务器启动失败/超时应在 status 中体现为失败态，而不是让 daemon 崩或整体超时 |
+| 验收点（怎么算过） | status 结构化输出；失败态可观测；不影响其它 RPC |
+| 代码来源 | `core/mcp/server.py`、`core/mcp/client.py` |
+| 建议用例条数 | P2，1 条（失败态可观测） |
+
+### FP-22　语音输入（P2）
+
+| 字段 | 内容 |
+|---|---|
+| 入口 / 命令 | `speech.transcribe`；TUI/GUI 的麦克风入口 |
+| 前置条件 | `IWAN_SPEECH_PREWARM=0`（避免拉模型）；无模型时只测错误分支 |
+| 正常流（期望行为） | 给一段受支持的音频，返回识别文本 |
+| 异常分支（重点） | 模型未下载/音频格式不支持/时长超限 → 明确报错（不得静默返回空串） |
+| 验收点（怎么算过） | 错误路径提示清晰；有模型时一次转写成功 |
+| 代码来源 | `core/speech.py` |
+| 建议用例条数 | P2，1 条（错误路径） |
+
 ## 5　追溯矩阵（功能点 → 接口 → 代码 → 用例）
 
 | 功能点 | 主要 RPC / 事件 | 代码位置（缺陷定位用） | 用例编号（测试组填写） |
@@ -306,6 +402,14 @@
 | FP-12 | files.changes / files.restore | core/shadow.py, core/app.py |  |
 | FP-13 | workspace.delete；files.* / git.* 事件 | core/app.py |  |
 | FP-14 | events.jsonl / trace / llm.usage | core/trace/writer.py, core/events/* |  |
+| FP-15 | ssh.conn_* / ssh.host_trust / ssh.key_* / ssh.term_*；ssh.output 事件 | core/ssh/* |  |
+| FP-16 | git.status/branches/log/commit/checkout/pull/push | core/gitpanel.py |  |
+| FP-17 | workflow.list/get/save/delete/run/cancel/runs；workflow.* 事件 | core/workflow/* |  |
+| FP-18 | schedule.list/create/update/delete/run_now；schedule.fired | core/schedule.py |  |
+| FP-19 | pr.context/list/create/review | core/pr.py |  |
+| FP-20 | plugin.list/install/set_enabled；plugin.changed | core/plugins/* |  |
+| FP-21 | mcp.status | core/mcp/* |  |
+| FP-22 | speech.transcribe | core/speech.py |  |
 
 > 用例编号建议格式：`FP-09-C-01`（功能点-类型-序号，类型 C=functional 功能、B=boundary 边界、E=error 异常、U=usability 易用、D=doc 文档）。
 
@@ -356,3 +460,4 @@
 | 版本 | 日期 | 变更内容 | 编制 |
 |---|---|---|---|
 | v1.0 | 2026-11-26 | 首个基线版本：锁定 14 个功能点口径、57 个配置变量、追溯矩阵、已知缺陷注意项、用户文档核对表模板 | 龙嘉璟 |
+| v1.1 | 2026-11-27 | 范围扩至全量 70 条 RPC：新增 FP-15—FP-22；同步产出 Excel 用例表 test-cases.xlsx | 龙嘉璟 |
