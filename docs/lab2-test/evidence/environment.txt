@@ -1,0 +1,19 @@
+# 环境登记（方案 6.1 environment.txt）
+
+成员: D 龙嘉璟
+角色: Bandit 安全静态审查 + 代码修复 + 开发自测
+被测版本 T0: dc568b2713ec0dc70ff00c908575e964edacf46f（src/tests/gui 与 f5c98d3 一致）
+历史对照 H0: b3c4363bc43d5e00dd15035ce25700c474e8ebad
+操作系统: Windows 11 x64
+Python: 3.12.13
+uv: 0.11.27
+Bandit: 1.9.4
+Ruff: 0.15.20
+Mypy: 2.1.0
+pytest: 9.1.1
+Node: v22.19.0
+Git: 2.47.0.windows.1
+端口: D=7441（A/B/C = 7438/7439/7440）
+隔离范围: TRACE/MEMORY/SESSIONS/PLUGINS/POLICY/TRUST/SECRETS 全部改道 runs/evidence/<日期>/；未使用专用测试用户前不起真实 daemon
+扫描范围: src/ 全量（46,486 行）
+扫描日期: 2026-11-28

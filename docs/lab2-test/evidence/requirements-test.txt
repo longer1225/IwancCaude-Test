@@ -1,0 +1,7 @@
+# 本轮冻结的测试工具版本（方案 2.1：首台完成后固定，其余环境按此安装）
+# 说明：bandit/pytest-cov 不在项目依赖内，用 uv run --with 临时注入，不改 pyproject/uv.lock
+bandit==1.9.4
+ruff==0.15.20
+mypy==2.1.0
+pytest==9.1.1
+pytest-cov==7.1.0

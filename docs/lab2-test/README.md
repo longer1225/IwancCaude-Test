@@ -16,7 +16,9 @@
 | 测试负责人（刘显尘） | [requirements-baseline.md](requirements-baseline.md) → 第 4、5 节 | 设计用例、填追溯矩阵、写《测试方案》 |
 | 文档测试员（龚让） | [user-doc-checklist.md](user-doc-checklist.md) | 逐条核对 README/RUNBOOK/TEAM_SETUP，填结论与缺陷号 |
 | 易用性与配置测试员（康泽祎） | [requirements-baseline.md](requirements-baseline.md) 第 3 节 + [test-baseline-report.md](test-baseline-report.md) | 搭隔离环境、按功能点设计易用性任务 |
-| 开发与修复（龙嘉璟） | [defect-template.md](defect-template.md) | **缺陷单模板**：标题格式、9.2 的 8 个字段、严重度判定、建单后必做三件事 | v1.0 |
+| 开发与修复（龙嘉璟） | [security-review.md](security-review.md) | **D（龙嘉璟）安全静态审查**：Bandit 全量扫描 145 条告警的处置口径、3 条 Medium 的逐条结论（误报/设计内/已知风险）、六类人工审查 TC-ST-01—06 初审 | v1.0（2026-11-28） |
+| [evidence/](evidence/) | D 的过程证据：`D-bandit.json`（原始扫描）、`D-static-review.csv`（145+6 行逐条处置）、`environment.txt`、`requirements-test.txt`、`H0-repro-results.md`（五项历史复现） | 2026-11-28 |
+| [defect-template.md](defect-template.md) | **缺陷单模板**：标题格式、9.2 的 8 个字段、严重度判定、建单后必做三件事 | v1.0 |
 | [regression-guide.md](regression-guide.md) | **回归指南**：三联回归三条、开发/测试两方各贴什么、09_回归记录怎么填、12-10 开发方要跑的 5 条用例 | v1.0 |
 | [review-notes.md](review-notes.md) | **评审与会议材料**：12-04 方案评审 10 项检查表、答辩 6 问、例会纪要模板、中期报告 5 组数据 | v1.0 |
 | [scripts/](scripts/) | 双实例与隔离环境脚本（7438/7439 + 6 个改道变量），首轮执行与 BUG-2 回归用 | v1.0 |
